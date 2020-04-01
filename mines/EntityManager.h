@@ -27,7 +27,7 @@ public:
 	{
 		auto it = stores.find(cID);
 		if (it == stores.end()) {
-			stores.emplace(cID, new packed_array_t(sizeof(C), 5));
+			stores.emplace(cID, new packed_array_t(sizeof(C), 2048));
 			it = stores.find(cID);
 		}
 
@@ -50,12 +50,24 @@ public:
 	}
 
 	template<typename C>
+	C& get_component(entity_t e)
+	{
+		return get_component<C>(e, C::id());
+	}
+
+	template<typename C>
 	collection_t<C*> any(const uint32_t cID)
 	{
 		auto it = stores.find(cID);
 		assert(it != stores.end());
 		auto pair = it->second->any<C>();
 		return { it->second->size(), pair.first, pair.second };
+	}
+
+	template<typename C>
+	collection_t<C*> any()
+	{
+		return any<C>(C::id());
 	}
 
 	std::vector<entity_t> join(const uint32_t aID, const uint32_t bID)
@@ -78,6 +90,12 @@ public:
 		}
 
 		return out;
+	}
+
+	template<typename A, typename B>
+	std::vector<entity_t> join()
+	{
+		return join(A::id(), B::id());
 	}
 
 private:

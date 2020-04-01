@@ -52,6 +52,7 @@ public:
 	template<typename C>
 	C& emplace(entity_t e, C&& c)
 	{
+		assert(e.index < max_elts);
 		if (dense[sparse[e.index]] != e) {
 			assert(sz < max_elts);
 			sparse[e.index] = sz++;
