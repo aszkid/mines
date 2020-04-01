@@ -49,9 +49,15 @@ int main(int argc, char **argv)
 
     entity_t tri = ctx.emgr.new_entity();
     ctx.emgr.attach_component<Triangle>(tri, {
-       -1.0f, -1.0f, 0.0f,
-        1.0f, -1.0f, 0.0f,
-        0.0f,  1.0f, 0.0f,
+     -1.0f,  0.0f, 0.0f,
+        0.0f,  0.0f, 0.0f,
+        -0.5f,  1.0f, 0.0f,
+    });
+    entity_t tri2 = ctx.emgr.new_entity();
+    ctx.emgr.attach_component<Triangle>(tri2, {
+       0.0f,  -1.0f, 0.0f,
+       1.0f,  -1.0f, 0.0f,
+       0.5f,  0.0f, 0.0f,
     });
 
     if (render_sys.init() != 0)
