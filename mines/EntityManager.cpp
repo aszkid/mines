@@ -7,6 +7,9 @@ entity_manager_t::entity_manager_t()
 
 entity_manager_t::~entity_manager_t()
 {
+    for (auto p : stores) {
+        delete p.second;
+    }
 }
 
 entity_t entity_manager_t::new_entity()

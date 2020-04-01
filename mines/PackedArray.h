@@ -19,10 +19,10 @@ public:
 		}
 	}
 
-	template<typename C, size_t MAX_ELTS>
-	static packed_array_t make()
+	template<typename C>
+	static packed_array_t make(size_t max_elts)
 	{
-		return packed_array_t(sizeof(C), MAX_ELTS);
+		return packed_array_t(sizeof(C), max_elts);
 	}
 
 	~packed_array_t()
@@ -74,6 +74,11 @@ public:
 		dense[sparse[e.index]] = back;
 		std::memcpy((void*)&data[sparse[e.index] * elt_sz], (void*)&data[sparse[back.index] * elt_sz], elt_sz);
 		sparse[back.index] = sparse[e.index];
+	}
+
+	entity_t* any()
+	{
+		return dense;
 	}
 
 	template<typename C>

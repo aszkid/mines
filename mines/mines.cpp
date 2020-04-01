@@ -48,27 +48,22 @@ int main(int argc, char **argv)
     entity_t a = ctx.emgr.new_entity();
     entity_t b = ctx.emgr.new_entity();
     entity_t c = ctx.emgr.new_entity();
-    entity_t d = ctx.emgr.new_entity();
-    entity_t e = ctx.emgr.new_entity();
 
-    auto arr2 = packed_array_t::make<float, 10>();
-    arr2.emplace(a, 3.f);
-    arr2.emplace(b, 9.f);
-    arr2.emplace(c, 18.f);
-    arr2.emplace(d, 27.f);
-    arr2.print<float>();
+    const uint32_t VEL_ID = "VELOCITY"_hash;
+    ctx.emgr.attach_component<float>(a, VEL_ID, 3.f);
+    ctx.emgr.attach_component<float>(b, VEL_ID, 9.f);
+    ctx.emgr.attach_component<float>(c, VEL_ID, 18.f);
 
-    std::printf("removing b...\n");
-    arr2.remove(b);
-    std::printf("inserting e...\n");
-    arr2.emplace(e, 81.f);
-    arr2.print<float>();
-    assert(arr2.has(b) == false);
+    const uint32_t POS_ID = "POSITION"_hash;
+    ctx.emgr.attach_component<float>(a, POS_ID, 99.f);
+    ctx.emgr.attach_component<float>(c, POS_ID, -5.f);
 
-    auto pair = arr2.any<float>();
-    for (size_t i = 0; i < arr2.size(); i++) {
-        std::printf("data[%zu] (entity=%zu) = %f\n",
-            i, (uint32_t)pair.first[i], pair.second[i]
+    auto join = ctx.emgr.join(POS_ID, VEL_ID);
+    for (entity_t& e : join) {
+        std::printf("entity(%zu) pos=%f, vel=%f\n",
+            (uint32_t)e,
+            ctx.emgr.get_component<float>(e, POS_ID),
+            ctx.emgr.get_component<float>(e, VEL_ID)
         );
     }
 
