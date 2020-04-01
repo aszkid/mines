@@ -13,6 +13,7 @@
 
 #include "Position.h"
 #include "Velocity.h"
+#include "Triangle.h"
 
 class PhysicsSystem {
 public:
@@ -46,23 +47,12 @@ int main(int argc, char **argv)
     render_system_t render_sys(&ctx);
     input_system_t input_sys(&ctx);
 
-    std::array<entity_t, 10> ents;
-    for (size_t i = 0; i < ents.size(); i++) {
-        ents[i] = ctx.emgr.new_entity();
-        ctx.emgr.attach_component<Position>(ents[i], { (float)i, -(float)i });
-        if (i % 2 == 0) {
-            ctx.emgr.attach_component<Velocity>(ents[i], { (float)5*i });
-        }
-    }
-
-    auto join = ctx.emgr.join<Position, Velocity>();
-    for (entity_t& e : join) {
-        std::printf("entity(%zu) pos=%f, vel=%f\n",
-            (uint32_t)e,
-            ctx.emgr.get_component<Position>(e).x,
-            ctx.emgr.get_component<Velocity>(e).vx
-        );
-    }
+    entity_t tri = ctx.emgr.new_entity();
+    ctx.emgr.attach_component<Triangle>(tri, {
+       -1.0f, -1.0f, 0.0f,
+        1.0f, -1.0f, 0.0f,
+        0.0f,  1.0f, 0.0f,
+    });
 
     if (render_sys.init() != 0)
         return EXIT_FAILURE;

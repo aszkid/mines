@@ -6,6 +6,6 @@ struct Position {
 	float x, y;
 
 	static const uint32_t id() {
-		return "POSITIONCOMPONENT"_hash;
+		return "POSITION"_hash;
 	}
 };

@@ -1,5 +1,6 @@
 #include "RenderSystem.h"
 #include "Context.h"
+#include "Triangle.h"
 #include <cstdio>
 
 enum STATUS {
@@ -8,6 +9,7 @@ enum STATUS {
     RS_ERR_SDLINIT,
     RS_ERR_SDLWIN,
     RS_ERR_GL,
+    RS_ERR_GLAD,
 };
 
 render_system_t::render_system_t(context_t* ctx)
@@ -27,6 +29,69 @@ render_system_t::~render_system_t()
     }
 }
 
+static GLuint load_shader()
+{
+    GLuint vsID = glCreateShader(GL_VERTEX_SHADER);
+    GLuint fsID = glCreateShader(GL_FRAGMENT_SHADER);
+
+    std::string vs_code = "#version 330 core\n"
+        "layout(location=0) in vec3 vpos;\n"
+        "void main() {\n"
+        "   gl_Position.xyz = vpos;\n"
+        "   gl_Position.w = 1.0;\n"
+        "}\n";
+    std::string fs_code = "#version 330 core\n"
+        "out vec4 color;\n"
+        "void main() {\n"
+        "   color = vec4(0.0,0.0,1.0,1.0);\n"
+        "}\n";
+
+    char const* vs_ptr = vs_code.c_str();
+    glShaderSource(vsID, 1, &vs_ptr, NULL);
+    glCompileShader(vsID);
+
+    GLint Result = GL_FALSE;
+    int InfoLogLength;
+    glGetShaderiv(vsID, GL_COMPILE_STATUS, &Result);
+    glGetShaderiv(vsID, GL_INFO_LOG_LENGTH, &InfoLogLength);
+    if (InfoLogLength > 0) {
+        std::vector<char> VertexShaderErrorMessage(InfoLogLength + 1);
+        glGetShaderInfoLog(vsID, InfoLogLength, NULL, &VertexShaderErrorMessage[0]);
+        std::printf("vs error: %s\n", &VertexShaderErrorMessage[0]);
+    }
+
+    char const* fs_ptr = fs_code.c_str();
+    glShaderSource(fsID, 1, &fs_ptr, NULL);
+    glCompileShader(fsID);
+    glGetShaderiv(fsID, GL_COMPILE_STATUS, &Result);
+    glGetShaderiv(fsID, GL_INFO_LOG_LENGTH, &InfoLogLength);
+    if (InfoLogLength > 0) {
+        std::vector<char> FragmentShaderErrorMessage(InfoLogLength + 1);
+        glGetShaderInfoLog(fsID, InfoLogLength, NULL, &FragmentShaderErrorMessage[0]);
+        std::printf("fs error: %s\n", &FragmentShaderErrorMessage[0]);
+    }
+
+    GLuint pID = glCreateProgram();
+    glAttachShader(pID, vsID);
+    glAttachShader(pID, fsID);
+    glLinkProgram(pID);
+
+    glGetProgramiv(pID, GL_LINK_STATUS, &Result);
+    glGetProgramiv(pID, GL_INFO_LOG_LENGTH, &InfoLogLength);
+    if (InfoLogLength > 0) {
+        std::vector<char> ProgramErrorMessage(InfoLogLength + 1);
+        glGetProgramInfoLog(pID, InfoLogLength, NULL, &ProgramErrorMessage[0]);
+        std::printf("p error: %s\n", &ProgramErrorMessage[0]);
+    }
+
+    glDetachShader(pID, vsID);
+    glDetachShader(pID, fsID);
+    glDeleteShader(vsID);
+    glDeleteShader(fsID);
+
+    return pID;
+}
+
 int render_system_t::init()
 {
     status = RS_UP;
@@ -37,16 +102,18 @@ int render_system_t::init()
         return status;
     }
 
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
-
     ctx->win = SDL_CreateWindow("mines", 100, 100, ctx->width, ctx->height, SDL_WINDOW_OPENGL | SDL_WINDOW_SHOWN);
     if (ctx->win == nullptr) {
         std::printf("SDL_CreateWindow error: %s\n", SDL_GetError());
         status = RS_ERR_SDLWIN;
         return status;
     }
+
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
+    SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
+    SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24); // ?
 
     ctx->gl_ctx = SDL_GL_CreateContext(ctx->win);
     if (ctx->gl_ctx == nullptr) {
@@ -61,9 +128,40 @@ int render_system_t::init()
         return status;
     }
 
-    glDisable(GL_DEPTH_TEST);
+    if (!gladLoadGL()) {
+        std::printf("gladLoadGL failed!\n");
+        status = RS_ERR_GLAD;
+        return status;
+    }
+
     glClearColor(0.5f, 0.f, 0.f, 1.f);
-    glViewport(0, 0, ctx->width, ctx->height);
+
+    auto tris = ctx->emgr.any<Triangle>();
+    for (size_t i = 0; i < tris.size; i++) {
+        std::printf("uploading triangle %d\n", (uint32_t)tris.entities[i]);
+        GLuint vao, vbo;
+        // generate VBO and VAO
+        glGenVertexArrays(1, &vao);
+        glGenBuffers(1, &vbo);
+        // bind VAO, start describing it
+        glBindVertexArray(vao);
+        // has a VBO bound
+        glBindBuffer(GL_ARRAY_BUFFER, vbo);
+        glBufferData(GL_ARRAY_BUFFER, sizeof(Triangle), &tris.components[i], GL_STATIC_DRAW);
+        // enable and set first vertex attribute (position)
+        glEnableVertexAttribArray(0);
+        glVertexAttribPointer(
+            0, //first vertex attribute
+            3, // has 3 components
+            GL_FLOAT, // each of type GL_FLOAT
+            GL_FALSE, // should not be normalized
+            3 * sizeof(float), // space between consecutive attributes
+            nullptr // offset of the first attribute in the buffer
+        );
+        vaos.push_back(vao);
+    }
+
+    shader = load_shader();
 
     return status;
 }
@@ -71,5 +169,13 @@ int render_system_t::init()
 void render_system_t::render()
 {
     glClear(GL_COLOR_BUFFER_BIT);
+    /////////////////////////////////
+    // render here
+    glUseProgram(shader);
+    for (GLuint vao : vaos) {
+        glBindVertexArray(vao);
+        glDrawArrays(GL_TRIANGLES, 0, 3);
+    }
+    /////////////////////////////////
     SDL_GL_SwapWindow(ctx->win);
 }

@@ -6,6 +6,6 @@ struct Velocity {
 	float vx;
 
 	static const uint32_t id() {
-		return "VELOCITYCOMPONENT"_hash;
+		return "VELOCITY"_hash;
 	}
 };
