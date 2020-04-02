@@ -1,4 +1,6 @@
 #include "InputSystem.h"
+#include "Context.h"
+#include "Triangle.h"
 #include <SDL.h>
 
 input_system_t::input_system_t(context_t* ctx)
@@ -22,6 +24,13 @@ int input_system_t::update()
         switch (e.type) {
         case SDL_QUIT:
             return 1;
+        case SDL_KEYDOWN:
+            ctx->emgr.update_component<Triangle>({ 0, 0 }, {
+                -0.5f, -0.5f, 0.0f,
+                 0.5f, -0.5f, 0.0f,
+                 0.0f,  0.5f, 0.0f
+            });
+            break;
         default:
             break;
         }

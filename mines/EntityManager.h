@@ -9,7 +9,7 @@
 
 struct state_msg_header_t {
 	enum Type {
-		C_NEW, C_UPDATE, C_DELETE
+		C_INSERT, C_UPDATE, C_DELETE
 	};
 	Type type;
 	entity_t e;
@@ -38,7 +38,17 @@ struct state_stream_t {
 		cdata.resize(old_sz + sizeof(C));
 		C* ptr = (C*)&cdata[old_sz];
 		*ptr = c;
-		events.push_back({ state_msg_header_t::C_NEW, e, old_sz });
+		events.push_back({ state_msg_header_t::C_INSERT, e, old_sz });
+	}
+
+	template<typename C>
+	void push_update(entity_t e, C& c)
+	{
+		const size_t old_sz = cdata.size();
+		cdata.resize(old_sz + sizeof(C));
+		C* ptr = (C*)&cdata[old_sz];
+		*ptr = c;
+		events.push_back({ state_msg_header_t::C_UPDATE, e, old_sz });
 	}
 
 	void swap()
@@ -71,21 +81,29 @@ public:
 	void free_entity(entity_t *es, size_t ct);
 
 	template<typename C>
-	void attach_component(entity_t e, const uint32_t cID, C&& component)
+	void insert_component(entity_t e, const uint32_t cID, C&& component)
 	{
-		auto it = changelogs.find(cID);
-		if (it == changelogs.end()) {
-			it = changelogs.emplace(cID, new state_stream_t(sizeof(C))).first;
-		}
-
-		state_stream_t* ss = it->second;
+		auto ss = get_ss_or_default<C>(cID);
 		ss->push_new<C>(e, component);
 	}
 
 	template<typename C>
-	inline void attach_component(entity_t e, C&& component)
+	inline void insert_component(entity_t e, C&& component)
 	{
-		attach_component<C>(e, C::id(), std::move(component));
+		insert_component<C>(e, C::id(), std::move(component));
+	}
+
+	template<typename C>
+	void update_component(entity_t e, const uint32_t cID, C&& component)
+	{
+		auto ss = get_ss_or_default<C>(cID);
+		ss->push_update<C>(e, component);
+	}
+
+	template<typename C>
+	inline void update_component(entity_t e, C&& component)
+	{
+		update_component<C>(e, C::id(), std::move(component));
 	}
 
 	template<typename C>
@@ -137,6 +155,16 @@ public:
 	}
 
 private:
+	template<typename C>
+	state_stream_t* get_ss_or_default(const uint32_t cID)
+	{
+		auto it = changelogs.find(cID);
+		if (it == changelogs.end()) {
+			it = changelogs.emplace(cID, new state_stream_t(sizeof(C))).first;
+		}
+		return it->second;
+	}
+
 	std::vector<entity_t> entities;
 	std::deque<entity_t> free_entities;
 

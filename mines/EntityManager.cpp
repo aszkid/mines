@@ -52,13 +52,14 @@ state_stream_t* entity_manager_t::get_state_stream(uint32_t cID)
 void entity_manager_t::materialize()
 {
 	for (auto& chlog : changelogs) {
+		auto it = stores.find(chlog.first);
+		if (it == stores.end()) {
+			it = stores.emplace(chlog.first, new packed_array_t(chlog.second->csize, 2048)).first;
+		}
 		for (auto& msg : chlog.second->events) {
 			switch (msg.type) {
-			case state_msg_header_t::C_NEW:
-				auto it = stores.find(chlog.first);
-				if (it == stores.end()) {
-					it = stores.emplace(chlog.first, new packed_array_t(chlog.second->csize, 2048)).first;
-				}
+			case state_msg_header_t::C_INSERT:
+			case state_msg_header_t::C_UPDATE:
 				it->second->emplace(msg.e, &chlog.second->cdata[msg.idx]);
 				break;
 			}

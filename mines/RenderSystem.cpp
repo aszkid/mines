@@ -149,16 +149,16 @@ int render_system_t::init()
     return status;
 }
 
-static GLuint new_triangle(Triangle *t)
+render_system_t::cmd_t render_system_t::new_triangle(Triangle *t)
 {
-    GLuint vao, vbo;
+    cmd_t cmd;
     // generate VBO and VAO
-    glGenVertexArrays(1, &vao);
-    glGenBuffers(1, &vbo);
+    glGenVertexArrays(1, &cmd.vao);
+    glGenBuffers(1, &cmd.vbo);
     // bind VAO, start describing it
-    glBindVertexArray(vao);
+    glBindVertexArray(cmd.vao);
     // has a VBO bound
-    glBindBuffer(GL_ARRAY_BUFFER, vbo);
+    glBindBuffer(GL_ARRAY_BUFFER, cmd.vbo);
     glBufferData(GL_ARRAY_BUFFER, sizeof(Triangle), t, GL_STATIC_DRAW);
     // enable and set first vertex attribute (position)
     glEnableVertexAttribArray(0);
@@ -169,8 +169,23 @@ static GLuint new_triangle(Triangle *t)
         GL_FALSE, // should not be normalized
         3 * sizeof(float), // space between consecutive attributes
         nullptr // offset of the first attribute in the buffer
+    ); 
+    return cmd;
+}
+
+void render_system_t::update_triangle(entity_t e)
+{
+    auto it = cmds.find(e);
+    assert(it != cmds.end());
+    cmd_t& cmd = it->second;
+    Triangle* t = &ctx->emgr.get_component<Triangle>(e);
+    glBindBuffer(GL_ARRAY_BUFFER, cmd.vbo);
+    glBufferSubData(
+        GL_ARRAY_BUFFER,
+        0,
+        sizeof(Triangle),
+        t
     );
-    return vao;
 }
 
 void render_system_t::render()
@@ -181,8 +196,11 @@ void render_system_t::render()
         // can safely access components directly: these changes
         // have been materialized by the entity manager
         switch (msg.type) {
-        case state_msg_header_t::C_NEW:
-            vaos.emplace(msg.e, new_triangle(&ctx->emgr.get_component<Triangle>(msg.e)));
+        case state_msg_header_t::C_INSERT:
+            cmds.emplace(msg.e, new_triangle(&ctx->emgr.get_component<Triangle>(msg.e)));
+            break;
+        case state_msg_header_t::C_UPDATE:
+            update_triangle(msg.e);
             break;
         default:
             break;
@@ -193,8 +211,9 @@ void render_system_t::render()
     /////////////////////////////////
     // render here
     glUseProgram(shader);
-    for (auto& vao : vaos) {
-        glBindVertexArray(vao.second);
+    for (auto& pair : cmds) {
+        auto& cmd = pair.second;
+        glBindVertexArray(cmd.vao);
         glDrawArrays(GL_TRIANGLES, 0, 3);
     }
     /////////////////////////////////
