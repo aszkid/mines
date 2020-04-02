@@ -32,7 +32,7 @@ struct state_stream_t {
 	size_t csize;
 
 	template<typename C>
-	void push_new(entity_t e, C&& c)
+	void push_new(entity_t e, C& c)
 	{
 		const size_t old_sz = cdata.size();
 		cdata.resize(old_sz + sizeof(C));
@@ -79,7 +79,7 @@ public:
 		}
 
 		state_stream_t* ss = it->second;
-		ss->push_new<C>(e, std::move(component));
+		ss->push_new<C>(e, component);
 	}
 
 	template<typename C>

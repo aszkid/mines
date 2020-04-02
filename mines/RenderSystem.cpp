@@ -20,12 +20,20 @@ render_system_t::render_system_t(context_t* ctx)
 render_system_t::~render_system_t()
 {
     switch (status) {
-    case RS_ERR_SDLINIT:
-        break;
-    case RS_ERR_SDLWIN:
-        SDL_Quit();
+    case RS_UP:
+        // clean everything up!
+        SDL_GL_DeleteContext(ctx->gl_ctx);
+    case RS_ERR_GLAD:
     case RS_ERR_GL:
+        // failed to create OpenGL context or load function pointers
         SDL_DestroyWindow(ctx->win);
+    case RS_ERR_SDLWIN:
+        // failed to create a window
+        SDL_Quit();
+    case RS_ERR_SDLINIT:
+    case RS_DOWN:
+        // failed to even initialize SDL, or never started!
+        break;
     }
 }
 
