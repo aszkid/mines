@@ -67,15 +67,8 @@ public:
 	entity_manager_t();
 	~entity_manager_t();
 
-	entity_t new_entity();
-	void new_entity(entity_t* es, size_t ct)
-	{
-		for (size_t i = 0; i < ct; i++) {
-			es[i] = new_entity();
-		}
-	}
-
-	void free_entity(entity_t e);
+	void new_entity(entity_t* es, size_t ct);
+	void free_entity(entity_t *es, size_t ct);
 
 	template<typename C>
 	void attach_component(entity_t e, const uint32_t cID, C&& component)
@@ -90,7 +83,7 @@ public:
 	}
 
 	template<typename C>
-	void attach_component(entity_t e, C&& component)
+	inline void attach_component(entity_t e, C&& component)
 	{
 		attach_component<C>(e, C::id(), std::move(component));
 	}
@@ -104,7 +97,7 @@ public:
 	}
 
 	template<typename C>
-	C& get_component(entity_t e)
+	inline C& get_component(entity_t e)
 	{
 		return get_component<C>(e, C::id());
 	}
@@ -120,70 +113,25 @@ public:
 	}
 
 	template<typename C>
-	collection_t<C*> any()
+	inline collection_t<C*> any()
 	{
 		return any<C>(C::id());
 	}
 
-	std::vector<entity_t> join(const uint32_t aID, const uint32_t bID)
-	{
-		auto itA = stores.find(aID);
-		auto itB = stores.find(bID);
-		assert(itA != stores.end() && itB != stores.end());
-		
-		auto storeA = itA->second;
-		auto storeB = itB->second;
-		if (storeA->size() > storeB->size()) {
-			return join(bID, aID);
-		}
-
-		std::vector<entity_t> out;
-		auto As = storeA->any();
-		for (size_t i = 0; i < storeA->size(); i++) {
-			if (storeB->has(As[i]))
-				out.push_back(As[i]);
-		}
-
-		return out;
-	}
+	std::vector<entity_t> join(const uint32_t aID, const uint32_t bID);
 
 	template<typename A, typename B>
-	std::vector<entity_t> join()
+	inline std::vector<entity_t> join()
 	{
 		return join(A::id(), B::id());
 	}
 
-	// materialize state stream for each component
-	void materialize()
-	{
-		for (auto& chlog : changelogs) {
-			for (auto& msg : chlog.second->events) {
-				switch (msg.type) {
-				case state_msg_header_t::C_NEW:
-					auto it = stores.find(chlog.first);
-					if (it == stores.end()) {
-						it = stores.emplace(chlog.first, new packed_array_t(chlog.second->csize, 2048)).first;
-					}
-					it->second->emplace(msg.e, &chlog.second->cdata[msg.idx]);
-					break;
-				}
-			}
+	void materialize();
 
-			// swap state streams
-			chlog.second->swap();
-		}
-	}
-
-	state_stream_t* get_state_stream(uint32_t cID)
-	{
-		auto it = changelogs.find(cID);
-		if (it == changelogs.end())
-			return nullptr;
-		return it->second;
-	}
+	state_stream_t* get_state_stream(uint32_t cID);
 
 	template<typename C>
-	state_stream_t* get_state_stream()
+	inline state_stream_t* get_state_stream()
 	{
 		return get_state_stream(C::id());
 	}
@@ -191,7 +139,6 @@ public:
 private:
 	std::vector<entity_t> entities;
 	std::deque<entity_t> free_entities;
-	int ct;
 
 	std::unordered_map<uint32_t, packed_array_t*> stores;
 	std::unordered_map<uint32_t, state_stream_t*> changelogs;
