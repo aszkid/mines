@@ -7,6 +7,54 @@
 #include "Entity.h"
 #include "PackedArray.h"
 
+struct state_msg_header_t {
+	enum Type {
+		C_NEW, C_UPDATE, C_DELETE
+	};
+	Type type;
+	entity_t e;
+	size_t idx;
+};
+
+//////////////////////////////////////////////////////////////
+// TODO: keep NEWs at front of cdata and UPDATEs at back
+//       or have a vector for each; would give better cache
+//       locality when materializing the ss
+//////////////////////////////////////////////////////////////
+struct state_stream_t {
+	state_stream_t(size_t csize)
+		: csize(csize)
+	{}
+
+	std::vector<state_msg_header_t> events_back;
+	std::vector<state_msg_header_t> events;
+	std::vector<uint8_t> cdata;
+	size_t csize;
+
+	template<typename C>
+	void push_new(entity_t e, C&& c)
+	{
+		const size_t old_sz = cdata.size();
+		cdata.resize(old_sz + sizeof(C));
+		C* ptr = (C*)&cdata[old_sz];
+		*ptr = c;
+		events.push_back({ state_msg_header_t::C_NEW, e, old_sz });
+	}
+
+	void swap()
+	{
+		events.swap(events_back);
+		events.clear();
+		cdata.clear();
+	}
+};
+
+////////////////////////////////////////////////////////////////////////////////////////
+// TODO: right now, accessing a component chases __5 pointers__ (!!!!!)
+//       (map -> store ptr -> store -> sparse -> dense -> data)
+//       if we avoid unordered_map, keep our stores as a packed_array_t[MAX_COMPONENTS],
+//       and merge the dense-data arrays, we could cut down to 2 pointers chased
+////////////////////////////////////////////////////////////////////////////////////////
 class entity_manager_t {
 public:
 	template<typename T>
@@ -25,14 +73,13 @@ public:
 	template<typename C>
 	void attach_component(entity_t e, const uint32_t cID, C&& component)
 	{
-		auto it = stores.find(cID);
-		if (it == stores.end()) {
-			stores.emplace(cID, new packed_array_t(sizeof(C), 2048));
-			it = stores.find(cID);
+		auto it = changelogs.find(cID);
+		if (it == changelogs.end()) {
+			it = changelogs.emplace(cID, new state_stream_t(sizeof(C))).first;
 		}
 
-		packed_array_t *store = it->second;
-		store->emplace(e, std::move(component));
+		state_stream_t* ss = it->second;
+		ss->push_new<C>(e, std::move(component));
 	}
 
 	template<typename C>
@@ -59,7 +106,8 @@ public:
 	collection_t<C*> any(const uint32_t cID)
 	{
 		auto it = stores.find(cID);
-		assert(it != stores.end());
+		if (it == stores.end())
+			return collection_t<C*>{ 0 };
 		auto pair = it->second->any<C>();
 		return { it->second->size(), pair.first, pair.second };
 	}
@@ -98,10 +146,46 @@ public:
 		return join(A::id(), B::id());
 	}
 
+	// materialize state stream for each component
+	void materialize()
+	{
+		for (auto& chlog : changelogs) {
+			for (auto& msg : chlog.second->events) {
+				switch (msg.type) {
+				case state_msg_header_t::C_NEW:
+					auto it = stores.find(chlog.first);
+					if (it == stores.end()) {
+						it = stores.emplace(chlog.first, new packed_array_t(chlog.second->csize, 2048)).first;
+					}
+					it->second->emplace(msg.e, &chlog.second->cdata[msg.idx]);
+					break;
+				}
+			}
+
+			// swap state streams
+			chlog.second->swap();
+		}
+	}
+
+	state_stream_t* get_state_stream(uint32_t cID)
+	{
+		auto it = changelogs.find(cID);
+		if (it == changelogs.end())
+			return nullptr;
+		return it->second;
+	}
+
+	template<typename C>
+	state_stream_t* get_state_stream()
+	{
+		return get_state_stream(C::id());
+	}
+
 private:
 	std::vector<entity_t> entities;
 	std::deque<entity_t> free_entities;
 	int ct;
 
 	std::unordered_map<uint32_t, packed_array_t*> stores;
+	std::unordered_map<uint32_t, state_stream_t*> changelogs;
 };

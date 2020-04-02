@@ -10,6 +10,9 @@ entity_manager_t::~entity_manager_t()
     for (auto p : stores) {
         delete p.second;
     }
+    for (auto s : changelogs) {
+        delete s.second;
+    }
 }
 
 entity_t entity_manager_t::new_entity()

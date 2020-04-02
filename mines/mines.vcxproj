@@ -157,7 +157,6 @@
     <ClCompile Include="EntityManager.cpp" />
     <ClCompile Include="InputSystem.cpp" />
     <ClCompile Include="mines.cpp" />
-    <ClCompile Include="PackedStore.cpp" />
     <ClCompile Include="RenderSystem.cpp" />
   </ItemGroup>
   <ItemGroup>

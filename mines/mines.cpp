@@ -5,7 +5,6 @@
 
 #include "Context.h"
 #include "EntityManager.h"
-#include "PackedStore.h"
 #include "PackedArray.h"
 
 #include "RenderSystem.h"
@@ -15,29 +14,8 @@
 #include "Velocity.h"
 #include "Triangle.h"
 
-class PhysicsSystem {
-public:
-    PhysicsSystem()
-        : data(sizeof(phys_t), 1024)
-    {
-
-    }
-private:
-    struct phys_t {
-        Position pos;
-        Velocity vel;
-    };
-    packed_array_t data;
-};
-
-class GraphicsSystem {
-private:
-    packed_array_t data;
-};
-
 int main(int argc, char **argv)
 {
-
     bool quit = false;
 
     context_t ctx;
@@ -68,6 +46,7 @@ int main(int argc, char **argv)
             break;
 
         render_sys.render();
+        ctx.emgr.materialize();
     }
 
     return EXIT_SUCCESS;

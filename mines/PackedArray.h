@@ -6,6 +6,9 @@
 
 class packed_array_t {
 public:
+	// TODO a copy constructor, so that we can use this by-value
+	//  in an std::unordered_map and thus chase 2 pointers
+	//  instead of 3 on each component lookup
 	packed_array_t(size_t elt_sz, size_t max_elts)
 		: elt_sz(elt_sz), max_elts(max_elts), sz(0)
 	{
@@ -49,8 +52,26 @@ public:
 		return *(C*)get(e);
 	}
 
-	template<typename C>
-	C& emplace(entity_t e, C&& c)
+	void emplace_batch(entity_t* e, uint8_t* data, size_t ct)
+	{
+		// TODO
+		// assumes entities have not been registered yet!
+		// if you emplace_batch ({... e ...}) after having emplaced e,
+		// a hole in `data` will be lost: a workaround is to garbage collect
+		// every once in a while, looking for data indices that are incorrectly
+		// linked up in its corresponding dense-sparse spot
+
+		// link up sparse-dense
+		const size_t old_sz = sz;
+		for (size_t i = 0; i < ct; i++) {
+			sparse[e[i].index] = sz++;
+			dense[sz] = e[i];
+		}
+		// copy component data
+		std::memcpy(&data[old_sz], data, ct * elt_sz);
+	}
+
+	void emplace(entity_t e, uint8_t* bytes)
 	{
 		assert(e.index < max_elts);
 		if (dense[sparse[e.index]] != e) {
@@ -58,11 +79,16 @@ public:
 			sparse[e.index] = sz++;
 		}
 
-		std::printf("emplacing entity=%zu at dense idx %zu\n", uint32_t(e), sparse[e.index]);
 		dense[sparse[e.index]] = e;
-		C* c_dest = (C*)get(e);
-		*c_dest = std::move(c);
-		return *c_dest;
+		uint8_t* dest = get(e);
+		std::memcpy(dest, bytes, elt_sz);
+	}
+
+	template<typename C>
+	C& emplace(entity_t e, C& c)
+	{
+		emplace(e, &c);
+		return get<C>(e);
 	}
 
 	void remove(entity_t e)

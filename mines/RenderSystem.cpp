@@ -136,44 +136,57 @@ int render_system_t::init()
 
     glClearColor(0.5f, 0.f, 0.f, 1.f);
 
-    auto tris = ctx->emgr.any<Triangle>();
-    for (size_t i = 0; i < tris.size; i++) {
-        std::printf("uploading triangle %d\n", (uint32_t)tris.entities[i]);
-        GLuint vao, vbo;
-        // generate VBO and VAO
-        glGenVertexArrays(1, &vao);
-        glGenBuffers(1, &vbo);
-        // bind VAO, start describing it
-        glBindVertexArray(vao);
-        // has a VBO bound
-        glBindBuffer(GL_ARRAY_BUFFER, vbo);
-        glBufferData(GL_ARRAY_BUFFER, sizeof(Triangle), &tris.components[i], GL_STATIC_DRAW);
-        // enable and set first vertex attribute (position)
-        glEnableVertexAttribArray(0);
-        glVertexAttribPointer(
-            0, //first vertex attribute
-            3, // has 3 components
-            GL_FLOAT, // each of type GL_FLOAT
-            GL_FALSE, // should not be normalized
-            3 * sizeof(float), // space between consecutive attributes
-            nullptr // offset of the first attribute in the buffer
-        );
-        vaos.push_back(vao);
-    }
-
     shader = load_shader();
 
     return status;
 }
 
+static GLuint new_triangle(Triangle *t)
+{
+    GLuint vao, vbo;
+    // generate VBO and VAO
+    glGenVertexArrays(1, &vao);
+    glGenBuffers(1, &vbo);
+    // bind VAO, start describing it
+    glBindVertexArray(vao);
+    // has a VBO bound
+    glBindBuffer(GL_ARRAY_BUFFER, vbo);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(Triangle), t, GL_STATIC_DRAW);
+    // enable and set first vertex attribute (position)
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(
+        0, //first vertex attribute
+        3, // has 3 components
+        GL_FLOAT, // each of type GL_FLOAT
+        GL_FALSE, // should not be normalized
+        3 * sizeof(float), // space between consecutive attributes
+        nullptr // offset of the first attribute in the buffer
+    );
+    return vao;
+}
+
 void render_system_t::render()
 {
+    // process backlogged events
+    state_stream_t* ss = ctx->emgr.get_state_stream<Triangle>();
+    for (auto& msg : ss->events_back) {
+        // can safely access components directly: these changes
+        // have been materialized by the entity manager
+        switch (msg.type) {
+        case state_msg_header_t::C_NEW:
+            vaos.emplace(msg.e, new_triangle(&ctx->emgr.get_component<Triangle>(msg.e)));
+            break;
+        default:
+            break;
+        }
+    }
+
     glClear(GL_COLOR_BUFFER_BIT);
     /////////////////////////////////
     // render here
     glUseProgram(shader);
-    for (GLuint vao : vaos) {
-        glBindVertexArray(vao);
+    for (auto& vao : vaos) {
+        glBindVertexArray(vao.second);
         glDrawArrays(GL_TRIANGLES, 0, 3);
     }
     /////////////////////////////////

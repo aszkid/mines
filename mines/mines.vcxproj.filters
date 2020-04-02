@@ -36,9 +36,6 @@
     <ClCompile Include="InputSystem.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="PackedStore.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="..\..\..\..\Desktop\dev\opengl-3.3-core\src\glad.c">
       <Filter>Source Files</Filter>
     </ClCompile>

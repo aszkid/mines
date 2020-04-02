@@ -1,7 +1,8 @@
 #pragma once
 
 #include <glad/glad.h>
-#include <vector>
+#include <unordered_map>
+#include "Entity.h"
 
 struct context_t;
 
@@ -13,10 +14,11 @@ public:
 	int init();
 	void render();
 
+	std::unordered_map<entity_t, GLuint, entity_hash_f> vaos;
+
 private:
 	int status;
 	context_t* ctx;
-	std::vector<GLuint> vaos;
 	GLuint shader;
 };
 
