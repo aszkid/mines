@@ -68,6 +68,13 @@ public:
 	~entity_manager_t();
 
 	entity_t new_entity();
+	void new_entity(entity_t* es, size_t ct)
+	{
+		for (size_t i = 0; i < ct; i++) {
+			es[i] = new_entity();
+		}
+	}
+
 	void free_entity(entity_t e);
 
 	template<typename C>

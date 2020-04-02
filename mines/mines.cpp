@@ -25,17 +25,28 @@ int main(int argc, char **argv)
     render_system_t render_sys(&ctx);
     input_system_t input_sys(&ctx);
 
-    entity_t tri = ctx.emgr.new_entity();
-    ctx.emgr.attach_component<Triangle>(tri, {
+    entity_t tris[4];
+    ctx.emgr.new_entity(tris, 4);
+
+    ctx.emgr.attach_component<Triangle>(tris[0], {
      -1.0f,  0.0f, 0.0f,
         0.0f,  0.0f, 0.0f,
         -0.5f,  1.0f, 0.0f,
     });
-    entity_t tri2 = ctx.emgr.new_entity();
-    ctx.emgr.attach_component<Triangle>(tri2, {
+    ctx.emgr.attach_component<Triangle>(tris[1], {
        0.0f,  -1.0f, 0.0f,
        1.0f,  -1.0f, 0.0f,
        0.5f,  0.0f, 0.0f,
+    });
+    ctx.emgr.attach_component<Triangle>(tris[2], {
+       0.0f,  0.0f, 0.0f,
+       1.0f,  0.0f, 0.0f,
+       0.5f,  1.0f, 0.0f,
+    });
+    ctx.emgr.attach_component<Triangle>(tris[3], {
+       -1.0f,  -1.0f, 0.0f,
+        0.0f,  -1.0f, 0.0f,
+        -0.5f,  0.0f, 0.0f,
     });
 
     if (render_sys.init() != 0)
