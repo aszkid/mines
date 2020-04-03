@@ -22,6 +22,9 @@
     <Filter Include="Header Files\systems">
       <UniqueIdentifier>{223b61dd-e842-4176-9b01-041814098166}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Header Files\assets">
+      <UniqueIdentifier>{70875d5a-6fa9-4ceb-9ed4-6a96474a510b}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="mines.cpp">
@@ -85,6 +88,9 @@
     </ClInclude>
     <ClInclude Include="RenderMesh.h">
       <Filter>Header Files\components</Filter>
+    </ClInclude>
+    <ClInclude Include="Mesh.h">
+      <Filter>Header Files\assets</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

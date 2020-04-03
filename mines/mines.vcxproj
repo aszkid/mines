@@ -174,6 +174,7 @@
     <ClInclude Include="EntityManager.h" />
     <ClInclude Include="hash.h" />
     <ClInclude Include="InputSystem.h" />
+    <ClInclude Include="Mesh.h" />
     <ClInclude Include="PackedArray.h" />
     <ClInclude Include="PackedStore.h" />
     <ClInclude Include="Position.h" />

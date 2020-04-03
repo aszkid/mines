@@ -30,9 +30,20 @@ public:
 	asset_manager_t();
 	~asset_manager_t();
 
+	template<typename T>
+	T* make(const asset_t asset)
+	{
+		T* t = (T*)std::malloc(sizeof(T));
+		load(asset, (uint8_t*)t);
+		return t;
+	}
+
 	void load(const asset_t asset, uint8_t *data);
+	void release(const asset_t asset);
+	uint8_t* allocate_chunk(const asset_t asset, const size_t sz);
 	uint8_t* get(const asset_t asset);
 private:
 	std::unordered_map<asset_t, uint8_t*, asset_hash_f> map;
+	std::unordered_map<asset_t, std::vector<uint8_t*>, asset_hash_f> chunks;
 };
 

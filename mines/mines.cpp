@@ -26,15 +26,10 @@ int main(int argc, char **argv)
     render_system_t render_sys(&ctx);
     input_system_t input_sys(&ctx);
 
-    const asset_t cube_mesh("/cube.obj"_hash);
-    const asset_t blank_material("/blank.mat"_hash);
-
     // preload assets
-    ctx.assets.load(cube_mesh, load_mesh("cube.obj"));
-    ctx.assets.load(blank_material, (uint8_t*)999);
-
-    std::printf("cube ptr: %d\n", (int)ctx.assets.get(cube_mesh));
-    std::printf("mesh ptr: %d\n", (int)ctx.assets.get(blank_material));
+    const asset_t monkey("/mesh/monkey"_hash);
+    if (load_mesh(&ctx.assets, monkey, "./monkey.obj") != 0)
+        return EXIT_FAILURE;
 
     entity_t tris[4];
     ctx.emgr.new_entity(tris, 4);
@@ -60,10 +55,10 @@ int main(int argc, char **argv)
         -0.5f,  0.0f, 0.0f,
     });
 
-    entity_t player;
-    ctx.emgr.new_entity(&player, 1);
-    ctx.emgr.insert_component<RenderMesh>(player, {
-        cube_mesh, blank_material
+    entity_t foo;
+    ctx.emgr.new_entity(&foo, 1);
+    ctx.emgr.insert_component<RenderMesh>(foo, {
+        monkey, 0
     });
 
     if (render_sys.init() != 0)

@@ -1,6 +1,7 @@
 #include "RenderSystem.h"
 #include "Context.h"
 #include "Triangle.h"
+#include "RenderMesh.h"
 #include <cstdio>
 
 enum STATUS {
@@ -215,6 +216,22 @@ void render_system_t::render()
             break;
         case state_msg_header_t::C_DELETE:
             handle_delete(msg.e);
+            break;
+        }
+    }
+
+    // process RenderMesh events
+    ss = ctx->emgr.get_state_stream<RenderMesh>();
+    for (auto& msg : ss->events_back) {
+        switch (msg.type) {
+        case state_msg_header_t::C_NEW:
+            std::printf("[render] new RenderMesh!\n");
+            break;
+        case state_msg_header_t::C_UPDATE:
+            std::printf("[render] update RenderMesh\n");
+            break;
+        case state_msg_header_t::C_DELETE:
+            std::printf("[render] delete RenderMesh\n");
             break;
         }
     }
