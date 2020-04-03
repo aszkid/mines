@@ -57,6 +57,8 @@ int main(int argc, char **argv)
             break;
 
         render_sys.render();
+        std::printf("[main] triangles before materializing...\n");
+        ctx.emgr.print<Triangle>();
         ctx.emgr.materialize();
     }
 

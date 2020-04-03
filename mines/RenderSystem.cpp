@@ -22,6 +22,7 @@ render_system_t::~render_system_t()
     switch (status) {
     case RS_UP:
         // clean everything up!
+        glDeleteProgram(shader);
         SDL_GL_DeleteContext(ctx->gl_ctx);
     case RS_ERR_GLAD:
     case RS_ERR_GL:
@@ -149,8 +150,10 @@ int render_system_t::init()
     return status;
 }
 
-render_system_t::cmd_t render_system_t::new_triangle(Triangle *t)
+void render_system_t::handle_new(entity_t e)
 {
+    std::printf("[render] new triangle\n");
+    Triangle* t = &ctx->emgr.get_component<Triangle>(e);
     cmd_t cmd;
     // generate VBO and VAO
     glGenVertexArrays(1, &cmd.vao);
@@ -170,11 +173,13 @@ render_system_t::cmd_t render_system_t::new_triangle(Triangle *t)
         3 * sizeof(float), // space between consecutive attributes
         nullptr // offset of the first attribute in the buffer
     ); 
-    return cmd;
+    
+    cmds.emplace(e, cmd);
 }
 
-void render_system_t::update_triangle(entity_t e)
+void render_system_t::handle_update(entity_t e)
 {
+    std::printf("[render] update triangle\n");
     auto it = cmds.find(e);
     assert(it != cmds.end());
     cmd_t& cmd = it->second;
@@ -188,6 +193,18 @@ void render_system_t::update_triangle(entity_t e)
     );
 }
 
+void render_system_t::handle_delete(entity_t e)
+{
+    std::printf("[render] delete triangle\n");
+    auto it = cmds.find(e);
+    if (it == cmds.end())
+        return;
+    cmd_t& cmd = it->second;
+    glDeleteBuffers(1, &cmd.vbo);
+    glDeleteVertexArrays(1, &cmd.vao);
+    cmds.erase(it);
+}
+
 void render_system_t::render()
 {
     // process backlogged events
@@ -196,20 +213,21 @@ void render_system_t::render()
         // can safely access components directly: these changes
         // have been materialized by the entity manager
         switch (msg.type) {
-        case state_msg_header_t::C_INSERT:
-            cmds.emplace(msg.e, new_triangle(&ctx->emgr.get_component<Triangle>(msg.e)));
+        case state_msg_header_t::C_NEW:
+            handle_new(msg.e);
             break;
         case state_msg_header_t::C_UPDATE:
-            update_triangle(msg.e);
+            handle_update(msg.e);
             break;
-        default:
+        case state_msg_header_t::C_DELETE:
+            handle_delete(msg.e);
             break;
         }
     }
 
-    glClear(GL_COLOR_BUFFER_BIT);
     /////////////////////////////////
     // render here
+    glClear(GL_COLOR_BUFFER_BIT);
     glUseProgram(shader);
     for (auto& pair : cmds) {
         auto& cmd = pair.second;

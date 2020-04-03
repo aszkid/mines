@@ -53,6 +53,8 @@ public:
 
 	uint8_t* get(entity_t e)
 	{
+		assert(e.index < max_elts);
+		assert(dense[sparse[e.index]] == e);
 		return &data[sparse[e.index] * elt_sz];
 	}
 
@@ -104,14 +106,23 @@ public:
 
 	void remove(entity_t e)
 	{
-		dense[sparse[e.index]] = entity_t::invalid();
-		if (e.index == sz--)
+		std::printf("[packed_array] removing at e=%zu:%zu\n", e.generation, e.index);
+		assert(e.index < max_elts);
+		if (dense[sparse[e.index]] != e) {
+			std::printf("[packed_array] entity has no component\n");
 			return;
+		}
+		dense[sparse[e.index]] = entity_t::invalid();
+		if (sparse[e.index] == --sz) {
+			std::printf("[packed_array] at back, rm'd\n");
+			return;
+		}
 
 		entity_t back = dense[sz];
 		dense[sparse[e.index]] = back;
 		std::memcpy((void*)&data[sparse[e.index] * elt_sz], (void*)&data[sparse[back.index] * elt_sz], elt_sz);
 		sparse[back.index] = sparse[e.index];
+		std::printf("[packed_array] switched with back!\n");
 	}
 
 	entity_t* any()
@@ -130,19 +141,18 @@ public:
 		return sz;
 	}
 
-	template<typename C>
 	void print() {
 		std::printf("sparse: [");
 		for (size_t i = 0; i < max_elts; i++) {
-			std::printf(" %zu:%zu ", i, sparse[i]);
+			std::printf(" %zu->%zu ", i, sparse[i]);
 		}
 		std::printf("]\ndense:  [");
 		for (size_t i = 0; i < max_elts; i++) {
-			std::printf(" %zu:", i);
+			std::printf(" %zu->", i);
 			if (dense[i] == entity_t::invalid()) {
 				std::printf("? ");
 			} else {
-				std::printf("%zu (%f) ", dense[i].index, get<C>(entity_t{ 0, i }));
+				std::printf("%zu ", dense[i].index);
 			}
 		}
 		std::printf("]\n");

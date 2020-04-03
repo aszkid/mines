@@ -9,7 +9,7 @@
 
 struct state_msg_header_t {
 	enum Type {
-		C_INSERT, C_UPDATE, C_DELETE
+		C_NEW, C_UPDATE, C_DELETE
 	};
 	Type type;
 	entity_t e;
@@ -41,23 +41,23 @@ struct state_stream_t {
 	size_t csize;
 
 	template<typename C>
-	void push_new(entity_t e, C& c)
+	void push_insert(entity_t e, C& c, bool update)
 	{
+		std::printf("[ss] pushing insert (%d) for e=%zu:%zu\n", update, e.generation, e.index);
 		const size_t old_sz = cdata.size();
 		cdata.resize(old_sz + sizeof(C));
 		C* ptr = (C*)&cdata[old_sz];
 		*ptr = c;
-		events.push_back({ state_msg_header_t::C_INSERT, e, old_sz });
+		events.push_back({
+			update ? state_msg_header_t::C_UPDATE : state_msg_header_t::C_NEW,
+			e, old_sz
+		});
 	}
 
-	template<typename C>
-	void push_update(entity_t e, C& c)
+	void push_delete(entity_t e)
 	{
-		const size_t old_sz = cdata.size();
-		cdata.resize(old_sz + sizeof(C));
-		C* ptr = (C*)&cdata[old_sz];
-		*ptr = c;
-		events.push_back({ state_msg_header_t::C_UPDATE, e, old_sz });
+		std::printf("[ss] pushing delete for e=%zu:%zu\n", e.generation, e.index);
+		events.push_back({ state_msg_header_t::C_DELETE, e, (size_t)-1 });
 	}
 
 	void swap()
@@ -93,26 +93,18 @@ public:
 	void insert_component(entity_t e, const uint32_t cID, C&& component)
 	{
 		auto ss = get_ss_or_default<C>(cID);
-		ss->push_new<C>(e, component);
+		auto store = get_store_or_default(cID, sizeof(C));
+		if (store->has(e)) {
+			ss->push_insert<C>(e, component, true);
+		} else {
+			ss->push_insert<C>(e, component, false);
+		}
 	}
 
 	template<typename C>
 	inline void insert_component(entity_t e, C&& component)
 	{
 		insert_component<C>(e, C::id(), std::move(component));
-	}
-
-	template<typename C>
-	void update_component(entity_t e, const uint32_t cID, C&& component)
-	{
-		auto ss = get_ss_or_default<C>(cID);
-		ss->push_update<C>(e, component);
-	}
-
-	template<typename C>
-	inline void update_component(entity_t e, C&& component)
-	{
-		update_component<C>(e, C::id(), std::move(component));
 	}
 
 	template<typename C>
@@ -127,6 +119,13 @@ public:
 	inline C& get_component(entity_t e)
 	{
 		return get_component<C>(e, C::id());
+	}
+
+	template<typename C>
+	void delete_component(entity_t e)
+	{
+		auto ss = get_ss_or_default<C>(C::id());
+		ss->push_delete(e);
 	}
 
 	template<typename C>
@@ -163,6 +162,13 @@ public:
 		return get_state_stream(C::id());
 	}
 
+	template<typename C>
+	void print()
+	{
+		auto store = get_store_or_default(C::id(), sizeof(C));
+		store->print();
+	}
+
 private:
 	template<typename C>
 	state_stream_t* get_ss_or_default(const uint32_t cID)
@@ -187,7 +193,7 @@ private:
 	{
 		auto it = stores.find(cID);
 		if (it == stores.end()) {
-			it = stores.emplace(cID, packed_array_t(elt_sz, 2048)).first;
+			it = stores.emplace(cID, packed_array_t(elt_sz, 10)).first;
 		}
 		return &it->second;
 	}

@@ -25,11 +25,23 @@ int input_system_t::update()
         case SDL_QUIT:
             return 1;
         case SDL_KEYDOWN:
-            ctx->emgr.update_component<Triangle>({ 0, 0 }, {
-                -0.5f, -0.5f, 0.0f,
-                 0.5f, -0.5f, 0.0f,
-                 0.0f,  0.5f, 0.0f
-            });
+            if (e.key.keysym.scancode == SDL_SCANCODE_UP) {
+                ctx->emgr.insert_component<Triangle>({ 0, 0 }, {
+                    -0.5f, -0.5f, 0.0f,
+                     0.5f, -0.5f, 0.0f,
+                     0.0f,  0.5f, 0.0f
+                    });
+            } else if (e.key.keysym.scancode == SDL_SCANCODE_DOWN) {
+                ctx->emgr.delete_component<Triangle>({ 0, 0 });
+            } else if (e.key.keysym.scancode == SDL_SCANCODE_RIGHT) {
+                ctx->emgr.delete_component<Triangle>({ 0, 2 });
+            } else if (e.key.keysym.scancode == SDL_SCANCODE_LEFT) {
+                ctx->emgr.insert_component<Triangle>({ 0, 2 }, {
+                    -0.5f,  0.0f, 0.0f,
+                     0.5f,  0.0f, 0.0f,
+                     0.0f,  1.0f, 0.0f
+                });
+            }
             break;
         default:
             break;

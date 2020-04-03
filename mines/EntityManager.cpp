@@ -45,15 +45,25 @@ state_stream_t* entity_manager_t::get_state_stream(uint32_t cID)
 
 void entity_manager_t::materialize()
 {
+	////////////////////////////////////////////////////
+	// TODO
+	//  sort state messages by header type:
+	//  first process insertions, then deletions, and
+	//  finally updates
+	////////////////////////////////////////////////////
 	for (auto& chlog : changelogs) {
 		uint32_t cID = chlog.first;
 		state_stream_t* ss = &chlog.second;
 		packed_array_t* store = get_store_or_default(cID, ss->csize);
 		for (auto& msg : ss->events) {
 			switch (msg.type) {
-			case state_msg_header_t::C_INSERT:
 			case state_msg_header_t::C_UPDATE:
+				assert(store->has(msg.e));
+			case state_msg_header_t::C_NEW:
 				store->emplace(msg.e, &ss->cdata[msg.idx]);
+				break;
+			case state_msg_header_t::C_DELETE:
+				store->remove(msg.e);
 				break;
 			}
 		}
@@ -68,6 +78,7 @@ std::vector<entity_t> entity_manager_t::join(const uint32_t aID, const uint32_t 
 	auto storeA = get_store(aID);
 	auto storeB = get_store(bID);
 	assert(storeA != nullptr && storeB != nullptr);
+
 	if (storeA->size() > storeB->size()) {
 		return join(bID, aID);
 	}
