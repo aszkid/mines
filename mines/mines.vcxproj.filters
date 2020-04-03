@@ -100,5 +100,11 @@
     <None Include="INFO.md">
       <Filter>Resource Files</Filter>
     </None>
+    <None Include="phong.vert">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="phong.frag">
+      <Filter>Resource Files</Filter>
+    </None>
   </ItemGroup>
 </Project>

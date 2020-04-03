@@ -186,6 +186,8 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="INFO.md" />
+    <None Include="phong.frag" />
+    <None Include="phong.vert" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

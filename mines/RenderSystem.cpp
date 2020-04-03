@@ -8,6 +8,7 @@
 #include <glm/mat4x4.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
+#include <fstream>
 
 enum STATUS {
     RS_UP = 0,
@@ -44,47 +45,24 @@ render_system_t::~render_system_t()
     }
 }
 
-static GLuint load_shader()
+std::string read_file(const char* fname)
+{
+    std::ifstream f(fname);
+    f.seekg(0, std::ios::end);
+    size_t sz = f.tellg();
+    std::string buffer(sz, ' ');
+    f.seekg(0);
+    f.read(&buffer[0], sz);
+    return buffer;
+}
+
+static GLuint load_shader(const char *vs, const char *fs)
 {
     GLuint vsID = glCreateShader(GL_VERTEX_SHADER);
     GLuint fsID = glCreateShader(GL_FRAGMENT_SHADER);
 
-    std::string vs_code = "#version 330 core\n"
-        "layout(location=0) in vec3 vpos;\n"
-        "layout(location=1) in vec3 vnormal;\n"
-        "out vec3 normal;\n"
-        "out vec3 fragpos;\n"
-        "uniform mat4 model;\n"
-        "uniform mat4 view;\n"
-        "uniform mat4 projection;\n"
-        "void main() {\n"
-        "   gl_Position = projection * view * model * vec4(vpos, 1.0);\n"
-        "   fragpos = vec3(model * vec4(vpos, 1.0));\n"
-        "   normal = vnormal;\n"
-        "}\n";
-    std::string fs_code = "#version 330 core\n"
-        "uniform vec3 lightPos;\n"
-        "uniform vec3 lightColor;\n"
-        "uniform vec3 objectColor;\n"
-        "uniform vec3 viewPos;\n"
-        "in vec3 normal;\n"
-        "in vec3 fragpos;\n"
-        "out vec4 color;\n"
-        "void main() {\n"
-        "     float specularStrength = 0.5;\n"
-        "     float ambientStrength = 0.1;\n"
-        "     vec3 ambient = ambientStrength * lightColor;\n"
-        "     vec3 norm = normalize(normal);\n"
-        "     vec3 lightDir = normalize(lightPos - fragpos);\n"
-        "     float diff = max(dot(norm, lightDir), 0.0);\n"
-        "     vec3 diffuse = diff * lightColor;\n"
-        "     vec3 viewDir = normalize(viewPos - fragpos);\n"
-        "     vec3 reflectDir = reflect(-lightDir, norm);\n"
-        "     float spec = pow(max(dot(viewDir, reflectDir), 0.0), 32);\n"
-        "     vec3 specular = specularStrength * spec * lightColor;\n"
-        "     vec3 result = (ambient + diffuse + specular) * objectColor;\n"
-        "     color = vec4(result, 1.0);\n"
-        "}\n";
+    std::string vs_code(read_file(vs));
+    std::string fs_code(read_file(fs));
 
     char const* vs_ptr = vs_code.c_str();
     glShaderSource(vsID, 1, &vs_ptr, NULL);
@@ -177,7 +155,7 @@ int render_system_t::init()
     glEnable(GL_DEPTH_TEST);
     glClearColor(0.5f, 0.f, 0.f, 1.f);
 
-    shader = load_shader();
+    shader = load_shader("./phong.vert", "./phong.frag");
 
     return status;
 }
