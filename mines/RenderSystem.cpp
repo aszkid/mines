@@ -66,17 +66,23 @@ static GLuint load_shader()
         "uniform vec3 lightPos;\n"
         "uniform vec3 lightColor;\n"
         "uniform vec3 objectColor;\n"
+        "uniform vec3 viewPos;\n"
         "in vec3 normal;\n"
         "in vec3 fragpos;\n"
         "out vec4 color;\n"
         "void main() {\n"
-        "     float ambientStrength = 0.2;\n"
+        "     float specularStrength = 0.5;\n"
+        "     float ambientStrength = 0.1;\n"
         "     vec3 ambient = ambientStrength * lightColor;\n"
         "     vec3 norm = normalize(normal);\n"
         "     vec3 lightDir = normalize(lightPos - fragpos);\n"
         "     float diff = max(dot(norm, lightDir), 0.0);\n"
         "     vec3 diffuse = diff * lightColor;\n"
-        "     vec3 result = (ambient + diffuse) * objectColor;\n"
+        "     vec3 viewDir = normalize(viewPos - fragpos);\n"
+        "     vec3 reflectDir = reflect(-lightDir, norm);\n"
+        "     float spec = pow(max(dot(viewDir, reflectDir), 0.0), 32);\n"
+        "     vec3 specular = specularStrength * spec * lightColor;\n"
+        "     vec3 result = (ambient + diffuse + specular) * objectColor;\n"
         "     color = vec4(result, 1.0);\n"
         "}\n";
 
@@ -242,14 +248,16 @@ void render_system_t::render(entity_t camera)
     int lightpos_loc = glGetUniformLocation(shader, "lightPos");
     int lightcol_loc = glGetUniformLocation(shader, "lightColor");
     int objectcol_loc = glGetUniformLocation(shader, "objectColor");
+    int viewpos_loc = glGetUniformLocation(shader, "viewPos");
 
     // set uniform values
     glUniformMatrix4fv(projection_loc, 1, GL_FALSE, glm::value_ptr(projection));
     glUniformMatrix4fv(model_loc, 1, GL_FALSE, glm::value_ptr(model));
     glUniformMatrix4fv(view_loc, 1, GL_FALSE, glm::value_ptr(view));
-    glUniform3f(lightpos_loc, 0.f, 5.f, 5.f);
+    glUniform3f(lightpos_loc, 0.f, 2.f, 2.f);
     glUniform3f(lightcol_loc, 1.f, 1.f, 1.f);
     glUniform3f(objectcol_loc, 0.f, 0.f, 1.f);
+    glUniform3f(viewpos_loc, cam->pos.x, cam->pos.y, cam->pos.z);
 
     cmd_t* cmd_arr = cmds.any<cmd_t>();
     for (size_t i = 0; i < cmds.size(); i++) {
