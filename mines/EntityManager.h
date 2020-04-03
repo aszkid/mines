@@ -24,7 +24,16 @@ struct state_msg_header_t {
 struct state_stream_t {
 	state_stream_t(size_t csize)
 		: csize(csize)
-	{}
+	{
+	}
+
+	state_stream_t(state_stream_t &&ss) noexcept
+		: csize(ss.csize)
+	{
+		events.swap(ss.events);
+		events_back.swap(ss.events_back);
+		cdata.swap(ss.cdata);
+	}
 
 	std::vector<state_msg_header_t> events_back;
 	std::vector<state_msg_header_t> events;
@@ -111,7 +120,7 @@ public:
 	{
 		auto it = stores.find(cID);
 		assert(it != stores.end());
-		return it->second->get<C>(e);
+		return it->second.get<C>(e);
 	}
 
 	template<typename C>
@@ -160,14 +169,32 @@ private:
 	{
 		auto it = changelogs.find(cID);
 		if (it == changelogs.end()) {
-			it = changelogs.emplace(cID, new state_stream_t(sizeof(C))).first;
+			it = changelogs.emplace(cID, state_stream_t(sizeof(C))).first;
 		}
-		return it->second;
+		return &it->second;
+	}
+
+	packed_array_t* get_store(const uint32_t cID)
+	{
+		auto it = stores.find(cID);
+		if (it == stores.end()) {
+			return nullptr;
+		}
+		return &it->second;
+	}
+
+	packed_array_t* get_store_or_default(const uint32_t cID, const size_t elt_sz)
+	{
+		auto it = stores.find(cID);
+		if (it == stores.end()) {
+			it = stores.emplace(cID, packed_array_t(elt_sz, 2048)).first;
+		}
+		return &it->second;
 	}
 
 	std::vector<entity_t> entities;
 	std::deque<entity_t> free_entities;
 
-	std::unordered_map<uint32_t, packed_array_t*> stores;
-	std::unordered_map<uint32_t, state_stream_t*> changelogs;
+	std::unordered_map<uint32_t, packed_array_t> stores;
+	std::unordered_map<uint32_t, state_stream_t> changelogs;
 };

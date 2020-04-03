@@ -6,12 +6,6 @@ entity_manager_t::entity_manager_t()
 
 entity_manager_t::~entity_manager_t()
 {
-    for (auto p : stores) {
-        delete p.second;
-    }
-    for (auto s : changelogs) {
-        delete s.second;
-    }
 }
 
 void entity_manager_t::new_entity(entity_t* es, size_t ct)
@@ -46,38 +40,34 @@ state_stream_t* entity_manager_t::get_state_stream(uint32_t cID)
 	auto it = changelogs.find(cID);
 	if (it == changelogs.end())
 		return nullptr;
-	return it->second;
+	return &it->second;
 }
 
 void entity_manager_t::materialize()
 {
 	for (auto& chlog : changelogs) {
-		auto it = stores.find(chlog.first);
-		if (it == stores.end()) {
-			it = stores.emplace(chlog.first, new packed_array_t(chlog.second->csize, 2048)).first;
-		}
-		for (auto& msg : chlog.second->events) {
+		uint32_t cID = chlog.first;
+		state_stream_t* ss = &chlog.second;
+		packed_array_t* store = get_store_or_default(cID, ss->csize);
+		for (auto& msg : ss->events) {
 			switch (msg.type) {
 			case state_msg_header_t::C_INSERT:
 			case state_msg_header_t::C_UPDATE:
-				it->second->emplace(msg.e, &chlog.second->cdata[msg.idx]);
+				store->emplace(msg.e, &ss->cdata[msg.idx]);
 				break;
 			}
 		}
 
 		// swap state streams
-		chlog.second->swap();
+		ss->swap();
 	}
 }
 
 std::vector<entity_t> entity_manager_t::join(const uint32_t aID, const uint32_t bID)
 {
-	auto itA = stores.find(aID);
-	auto itB = stores.find(bID);
-	assert(itA != stores.end() && itB != stores.end());
-
-	auto storeA = itA->second;
-	auto storeB = itB->second;
+	auto storeA = get_store(aID);
+	auto storeB = get_store(bID);
+	assert(storeA != nullptr && storeB != nullptr);
 	if (storeA->size() > storeB->size()) {
 		return join(bID, aID);
 	}

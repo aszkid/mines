@@ -6,9 +6,6 @@
 
 class packed_array_t {
 public:
-	// TODO a copy constructor, so that we can use this by-value
-	//  in an std::unordered_map and thus chase 2 pointers
-	//  instead of 3 on each component lookup
 	packed_array_t(size_t elt_sz, size_t max_elts)
 		: elt_sz(elt_sz), max_elts(max_elts), sz(0)
 	{
@@ -22,17 +19,31 @@ public:
 		}
 	}
 
-	template<typename C>
-	static packed_array_t make(size_t max_elts)
+	packed_array_t(packed_array_t&& arr) noexcept
+		: elt_sz(arr.elt_sz), max_elts(arr.max_elts), sz(arr.sz)
 	{
-		return packed_array_t(sizeof(C), max_elts);
+		data = nullptr;
+		dense = nullptr;
+		sparse = nullptr;
+		std::swap(data, arr.data);
+		std::swap(dense, arr.dense);
+		std::swap(sparse, arr.sparse);
 	}
 
 	~packed_array_t()
 	{
-		delete[] data;
-		delete[] dense;
-		delete[] sparse;
+		if (data)
+			delete[] data;
+		if (dense)
+			delete[] dense;
+		if (sparse)
+			delete[] sparse;
+	}
+
+	template<typename C>
+	static packed_array_t make(size_t max_elts)
+	{
+		return packed_array_t(sizeof(C), max_elts);
 	}
 
 	bool has(entity_t e) const
