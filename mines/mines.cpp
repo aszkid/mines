@@ -23,13 +23,16 @@ int main(int argc, char **argv)
 
     render_system_t render_sys(&ctx);
     input_system_t input_sys(&ctx);
-    asset_manager_t assets;
 
     const asset_t cube_mesh("/cube.obj"_hash);
     const asset_t blank_material("/blank.mat"_hash);
+
     // preload assets
-    assets.load(cube_mesh, nullptr);
-    assets.load(blank_material, nullptr);
+    ctx.assets.load(cube_mesh, (uint8_t*)123);
+    ctx.assets.load(blank_material, (uint8_t*)999);
+
+    std::printf("cube ptr: %d\n", (int)ctx.assets.get(cube_mesh));
+    std::printf("mesh ptr: %d\n", (int)ctx.assets.get(blank_material));
 
     entity_t tris[4];
     ctx.emgr.new_entity(tris, 4);

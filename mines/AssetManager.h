@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <unordered_map>
 #include "PackedArray.h"
 
 struct asset_t {
@@ -13,13 +14,13 @@ struct asset_t {
 	{
 		return id;
 	}
+};
 
-	inline static asset_t invalid() {
-		return { ~(uint32_t)0 };
-	}
-
-	inline uint32_t index() const {
-		return id;
+struct asset_hash_f {
+	template<typename T>
+	size_t operator() (const T& a) const
+	{
+		return uint32_t(static_cast<asset_t>(a));
 	}
 };
 
@@ -32,6 +33,6 @@ public:
 	void load(const asset_t asset, uint8_t *data);
 	uint8_t* get(const asset_t asset);
 private:
-	packed_array_t<asset_t> map;
+	std::unordered_map<asset_t, uint8_t*, asset_hash_f> map;
 };
 
