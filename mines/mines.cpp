@@ -46,14 +46,11 @@ int main(int argc, char **argv)
     if (render_sys.init() != 0)
         return EXIT_FAILURE;
 
-    // materialize right before rendering for the first time
-    ctx.emgr.materialize();
-
     while (!quit) {
+        ctx.emgr.materialize();
         if (input_sys.update() != 0)
             break;
         render_sys.render(camera);
-        ctx.emgr.materialize();
     }
 
     return EXIT_SUCCESS;
