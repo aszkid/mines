@@ -84,7 +84,7 @@ std::vector<entity_t> entity_manager_t::join(const uint32_t aID, const uint32_t 
 	}
 
 	std::vector<entity_t> out;
-	auto As = storeA->any();
+	auto As = storeA->any_entities();
 	for (size_t i = 0; i < storeA->size(); i++) {
 		if (storeB->has(As[i]))
 			out.push_back(As[i]);

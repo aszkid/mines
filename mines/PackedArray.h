@@ -2,6 +2,8 @@
 
 #include <cassert>
 #include <utility>
+#include <cstdio>
+#include <cstring>
 #include "Entity.h"
 
 class packed_array_t {
@@ -100,38 +102,39 @@ public:
 	template<typename C>
 	C& emplace(entity_t e, C& c)
 	{
-		emplace(e, &c);
+		emplace(e, (uint8_t*)&c);
 		return get<C>(e);
 	}
 
 	void remove(entity_t e)
 	{
-		std::printf("[packed_array] removing at e=%zu:%zu\n", e.generation, e.index);
 		assert(e.index < max_elts);
-		if (dense[sparse[e.index]] != e) {
-			std::printf("[packed_array] entity has no component\n");
+		if (dense[sparse[e.index]] != e)
 			return;
-		}
 		dense[sparse[e.index]] = entity_t::invalid();
-		if (sparse[e.index] == --sz) {
-			std::printf("[packed_array] at back, rm'd\n");
+		if (sparse[e.index] == --sz)
 			return;
-		}
 
 		entity_t back = dense[sz];
 		dense[sparse[e.index]] = back;
 		std::memcpy((void*)&data[sparse[e.index] * elt_sz], (void*)&data[sparse[back.index] * elt_sz], elt_sz);
 		sparse[back.index] = sparse[e.index];
-		std::printf("[packed_array] switched with back!\n");
 	}
 
-	entity_t* any()
+	template<typename C>
+	C* any()
+	{
+		assert(sizeof(C) == elt_sz);
+		return (C*)data;
+	}
+
+	entity_t* any_entities()
 	{
 		return dense;
 	}
 
 	template<typename C>
-	std::pair<entity_t*, C*> any()
+	std::pair<entity_t*, C*> any_pair()
 	{
 		return std::pair<entity_t*, C*>(dense, (C*)data);
 	}

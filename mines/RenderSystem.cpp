@@ -13,7 +13,7 @@ enum STATUS {
 };
 
 render_system_t::render_system_t(context_t* ctx)
-    : ctx(ctx), status(RS_DOWN)
+    : ctx(ctx), status(RS_DOWN), cmds(sizeof(cmd_t), 16)
 {
 }
 
@@ -152,7 +152,6 @@ int render_system_t::init()
 
 void render_system_t::handle_new(entity_t e)
 {
-    std::printf("[render] new triangle\n");
     Triangle* t = &ctx->emgr.get_component<Triangle>(e);
     cmd_t cmd;
     // generate VBO and VAO
@@ -179,10 +178,7 @@ void render_system_t::handle_new(entity_t e)
 
 void render_system_t::handle_update(entity_t e)
 {
-    std::printf("[render] update triangle\n");
-    auto it = cmds.find(e);
-    assert(it != cmds.end());
-    cmd_t& cmd = it->second;
+    cmd_t& cmd = cmds.get<cmd_t>(e);
     Triangle* t = &ctx->emgr.get_component<Triangle>(e);
     glBindBuffer(GL_ARRAY_BUFFER, cmd.vbo);
     glBufferSubData(
@@ -195,14 +191,12 @@ void render_system_t::handle_update(entity_t e)
 
 void render_system_t::handle_delete(entity_t e)
 {
-    std::printf("[render] delete triangle\n");
-    auto it = cmds.find(e);
-    if (it == cmds.end())
+    if (!cmds.has(e))
         return;
-    cmd_t& cmd = it->second;
+    cmd_t& cmd = cmds.get<cmd_t>(e);
     glDeleteBuffers(1, &cmd.vbo);
     glDeleteVertexArrays(1, &cmd.vao);
-    cmds.erase(it);
+    cmds.remove(e);
 }
 
 void render_system_t::render()
@@ -229,8 +223,9 @@ void render_system_t::render()
     // render here
     glClear(GL_COLOR_BUFFER_BIT);
     glUseProgram(shader);
-    for (auto& pair : cmds) {
-        auto& cmd = pair.second;
+    cmd_t* cmd_arr = cmds.any<cmd_t>();
+    for (size_t i = 0; i < cmds.size(); i++) {
+        auto& cmd = cmd_arr[i];
         glBindVertexArray(cmd.vao);
         glDrawArrays(GL_TRIANGLES, 0, 3);
     }

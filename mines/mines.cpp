@@ -55,10 +55,7 @@ int main(int argc, char **argv)
     while (!quit) {
         if (input_sys.update() != 0)
             break;
-
         render_sys.render();
-        std::printf("[main] triangles before materializing...\n");
-        ctx.emgr.print<Triangle>();
         ctx.emgr.materialize();
     }
 

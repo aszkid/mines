@@ -43,7 +43,6 @@ struct state_stream_t {
 	template<typename C>
 	void push_insert(entity_t e, C& c, bool update)
 	{
-		std::printf("[ss] pushing insert (%d) for e=%zu:%zu\n", update, e.generation, e.index);
 		const size_t old_sz = cdata.size();
 		cdata.resize(old_sz + sizeof(C));
 		C* ptr = (C*)&cdata[old_sz];
@@ -56,7 +55,6 @@ struct state_stream_t {
 
 	void push_delete(entity_t e)
 	{
-		std::printf("[ss] pushing delete for e=%zu:%zu\n", e.generation, e.index);
 		events.push_back({ state_msg_header_t::C_DELETE, e, (size_t)-1 });
 	}
 
@@ -134,7 +132,7 @@ public:
 		auto it = stores.find(cID);
 		if (it == stores.end())
 			return collection_t<C*>{ 0 };
-		auto pair = it->second->any<C>();
+		auto pair = it->second->any_pair<C>();
 		return { it->second->size(), pair.first, pair.second };
 	}
 
@@ -193,7 +191,7 @@ private:
 	{
 		auto it = stores.find(cID);
 		if (it == stores.end()) {
-			it = stores.emplace(cID, packed_array_t(elt_sz, 10)).first;
+			it = stores.emplace(cID, packed_array_t(elt_sz, 8)).first;
 		}
 		return &it->second;
 	}

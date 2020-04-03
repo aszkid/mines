@@ -1,12 +1,16 @@
 #pragma once
 
 #include <glad/glad.h>
-#include <unordered_map>
 #include "Entity.h"
 #include "Triangle.h"
+#include "PackedArray.h"
 
 struct context_t;
 
+//////////////////////////////////////////////
+// TODO: consider using the pimpl idiom
+//  to abstract the implementation
+//////////////////////////////////////////////
 class render_system_t {
 public:
 	struct cmd_t {
@@ -19,8 +23,7 @@ public:
 	int init();
 	void render();
 
-	// TODO use packed array!!!
-	std::unordered_map<entity_t, cmd_t, entity_hash_f> cmds;
+	packed_array_t cmds;
 private:
 	int status;
 	context_t* ctx;
