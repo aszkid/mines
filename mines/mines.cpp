@@ -4,14 +4,12 @@
 #include <array>
 
 #include "Context.h"
-#include "EntityManager.h"
-#include "PackedArray.h"
-
 #include "RenderSystem.h"
 #include "InputSystem.h"
 
 #include "Triangle.h"
 #include "RenderMesh.h"
+#include "Camera.h"
 
 #include "MeshLoader.cpp"
 
@@ -26,7 +24,6 @@ int main(int argc, char **argv)
     render_system_t render_sys(&ctx);
     input_system_t input_sys(&ctx);
 
-    // load assets
     const asset_t monkey("/mesh/monkey"_hash);
     if (load_mesh(&ctx.assets, monkey, "./monkey.obj") != 0)
         return EXIT_FAILURE;
@@ -37,13 +34,21 @@ int main(int argc, char **argv)
         monkey, 0
     });
 
+    entity_t camera;
+    ctx.emgr.new_entity(&camera, 1);
+    ctx.emgr.insert_component<Camera>(camera, {
+        glm::vec3(0.f, 0.f, -2.f),
+        glm::vec3(0.f, 1.f, 0.f),
+        glm::vec3(0.f, 0.f, 0.f)
+    });
+
     if (render_sys.init() != 0)
         return EXIT_FAILURE;
 
     while (!quit) {
         if (input_sys.update() != 0)
             break;
-        render_sys.render();
+        render_sys.render(camera);
         ctx.emgr.materialize();
     }
 

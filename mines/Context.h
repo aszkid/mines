@@ -4,8 +4,6 @@
 
 #include "AssetManager.h"
 #include "EntityManager.h"
-#include "InputSystem.h"
-#include "RenderSystem.h"
 
 struct context_t {
     SDL_Window* win;

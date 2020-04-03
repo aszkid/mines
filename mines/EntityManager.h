@@ -67,8 +67,8 @@ struct state_stream_t {
 };
 
 ////////////////////////////////////////////////////////////////////////////////////////
-// TODO: right now, accessing a component chases __5 pointers__ (!!!!!)
-//       (map -> store ptr -> store -> sparse -> dense -> data)
+// TODO: right now, accessing a component chases __4 pointers__
+//       (map -> store -> sparse -> dense -> data)
 //       if we avoid unordered_map, keep our stores as a packed_array_t[MAX_COMPONENTS],
 //       and merge the dense-data arrays, we could cut down to 2 pointers chased
 ////////////////////////////////////////////////////////////////////////////////////////

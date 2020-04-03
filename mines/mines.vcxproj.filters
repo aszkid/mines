@@ -92,6 +92,9 @@
     <ClInclude Include="Mesh.h">
       <Filter>Header Files\assets</Filter>
     </ClInclude>
+    <ClInclude Include="Camera.h">
+      <Filter>Header Files\components</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <None Include="INFO.md">

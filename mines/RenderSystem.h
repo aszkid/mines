@@ -21,11 +21,12 @@ struct render_system_t {
 	~render_system_t();
 
 	int init();
-	void render();
+	void render(entity_t camera);
 
 	packed_array_t<entity_t> cmds;
 	int status;
 	context_t* ctx;
 	GLuint shader;
+	entity_t camera;
 };
 
