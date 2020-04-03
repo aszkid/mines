@@ -20,7 +20,7 @@ void entity_manager_t::new_entity(entity_t* es, size_t ct)
 	}
 
 	while (i < ct) {
-		es[i] = entity_t{ 0, entities.size() };
+		es[i] = entity_t{ 0, (uint32_t)entities.size() };
 		entities.push_back(es[i]);
 		i++;
 	}

@@ -13,6 +13,8 @@
 #include "Triangle.h"
 #include "RenderMesh.h"
 
+#include "MeshLoader.cpp"
+
 int main(int argc, char **argv)
 {
     bool quit = false;
@@ -28,7 +30,7 @@ int main(int argc, char **argv)
     const asset_t blank_material("/blank.mat"_hash);
 
     // preload assets
-    ctx.assets.load(cube_mesh, (uint8_t*)123);
+    ctx.assets.load(cube_mesh, load_mesh("cube.obj"));
     ctx.assets.load(blank_material, (uint8_t*)999);
 
     std::printf("cube ptr: %d\n", (int)ctx.assets.get(cube_mesh));
