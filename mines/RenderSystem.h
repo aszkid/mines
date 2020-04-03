@@ -2,7 +2,6 @@
 
 #include <glad/glad.h>
 #include "Entity.h"
-#include "Triangle.h"
 #include "PackedArray.h"
 
 struct context_t;
@@ -27,6 +26,5 @@ struct render_system_t {
 	int status;
 	context_t* ctx;
 	GLuint shader;
-	entity_t camera;
 };
 

@@ -37,13 +37,17 @@ int main(int argc, char **argv)
     entity_t camera;
     ctx.emgr.new_entity(&camera, 1);
     ctx.emgr.insert_component<Camera>(camera, {
-        glm::vec3(0.f, 0.f, -2.f),
+        glm::vec3(0.f, 0.f, 3.f),
         glm::vec3(0.f, 1.f, 0.f),
-        glm::vec3(0.f, 0.f, 0.f)
+        glm::vec3(0.f, 0.f, 0.f),
+        45.f
     });
 
     if (render_sys.init() != 0)
         return EXIT_FAILURE;
+
+    // materialize right before rendering for the first time
+    ctx.emgr.materialize();
 
     while (!quit) {
         if (input_sys.update() != 0)
