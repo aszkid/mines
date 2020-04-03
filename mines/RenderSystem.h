@@ -23,7 +23,7 @@ public:
 	int init();
 	void render();
 
-	packed_array_t cmds;
+	packed_array_t<entity_t> cmds;
 private:
 	int status;
 	context_t* ctx;

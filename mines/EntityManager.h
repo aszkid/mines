@@ -178,7 +178,7 @@ private:
 		return &it->second;
 	}
 
-	packed_array_t* get_store(const uint32_t cID)
+	packed_array_t<entity_t>* get_store(const uint32_t cID)
 	{
 		auto it = stores.find(cID);
 		if (it == stores.end()) {
@@ -187,11 +187,11 @@ private:
 		return &it->second;
 	}
 
-	packed_array_t* get_store_or_default(const uint32_t cID, const size_t elt_sz)
+	packed_array_t<entity_t>* get_store_or_default(const uint32_t cID, const size_t elt_sz)
 	{
 		auto it = stores.find(cID);
 		if (it == stores.end()) {
-			it = stores.emplace(cID, packed_array_t(elt_sz, 8)).first;
+			it = stores.emplace(cID, packed_array_t<entity_t>(elt_sz, 8)).first;
 		}
 		return &it->second;
 	}
@@ -199,6 +199,6 @@ private:
 	std::vector<entity_t> entities;
 	std::deque<entity_t> free_entities;
 
-	std::unordered_map<uint32_t, packed_array_t> stores;
+	std::unordered_map<uint32_t, packed_array_t<entity_t>> stores;
 	std::unordered_map<uint32_t, state_stream_t> changelogs;
 };

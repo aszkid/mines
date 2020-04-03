@@ -4,19 +4,19 @@
 #include <utility>
 #include <cstdio>
 #include <cstring>
-#include "Entity.h"
 
+template<typename E>
 class packed_array_t {
 public:
 	packed_array_t(size_t elt_sz, size_t max_elts)
 		: elt_sz(elt_sz), max_elts(max_elts), sz(0)
 	{
 		data = new uint8_t[max_elts * elt_sz];
-		dense = new entity_t[max_elts];
+		dense = new E[max_elts];
 		sparse = new size_t[max_elts];
 
 		for (size_t i = 0; i < max_elts; i++) {
-			dense[i] = entity_t::invalid();
+			dense[i] = E::invalid();
 			sparse[i] = 0;
 		}
 	}
@@ -48,26 +48,26 @@ public:
 		return packed_array_t(sizeof(C), max_elts);
 	}
 
-	bool has(entity_t e) const
+	bool has(E e) const
 	{
-		return dense[sparse[e.index]] == e;
+		return dense[sparse[e.index()]] == e;
 	}
 
-	uint8_t* get(entity_t e)
+	uint8_t* get(E e)
 	{
-		assert(e.index < max_elts);
-		assert(dense[sparse[e.index]] == e);
-		return &data[sparse[e.index] * elt_sz];
+		assert(e.index() < max_elts);
+		assert(dense[sparse[e.index()]] == e);
+		return &data[sparse[e.index()] * elt_sz];
 	}
 
 	template<typename C>
-	C& get(entity_t e)
+	C& get(E e)
 	{
 		assert(sizeof(C) == elt_sz);
 		return *(C*)get(e);
 	}
 
-	void emplace_batch(entity_t* e, uint8_t* data, size_t ct)
+	void emplace_batch(E* e, uint8_t* data, size_t ct)
 	{
 		// TODO
 		// assumes entities have not been registered yet!
@@ -79,46 +79,46 @@ public:
 		// link up sparse-dense
 		const size_t old_sz = sz;
 		for (size_t i = 0; i < ct; i++) {
-			sparse[e[i].index] = sz++;
+			sparse[e[i].index()] = sz++;
 			dense[sz] = e[i];
 		}
 		// copy component data
 		std::memcpy(&data[old_sz], data, ct * elt_sz);
 	}
 
-	void emplace(entity_t e, uint8_t* bytes)
+	void emplace(E e, uint8_t* bytes)
 	{
-		assert(e.index < max_elts);
-		if (dense[sparse[e.index]] != e) {
+		assert(e.index() < max_elts);
+		if (dense[sparse[e.index()]] != e) {
 			assert(sz < max_elts);
-			sparse[e.index] = sz++;
+			sparse[e.index()] = sz++;
 		}
 
-		dense[sparse[e.index]] = e;
+		dense[sparse[e.index()]] = e;
 		uint8_t* dest = get(e);
 		std::memcpy(dest, bytes, elt_sz);
 	}
 
 	template<typename C>
-	C& emplace(entity_t e, C& c)
+	C& emplace(E e, C& c)
 	{
 		emplace(e, (uint8_t*)&c);
 		return get<C>(e);
 	}
 
-	void remove(entity_t e)
+	void remove(E e)
 	{
-		assert(e.index < max_elts);
-		if (dense[sparse[e.index]] != e)
+		assert(e.index() < max_elts);
+		if (dense[sparse[e.index()]] != e)
 			return;
-		dense[sparse[e.index]] = entity_t::invalid();
-		if (sparse[e.index] == --sz)
+		dense[sparse[e.index()]] = E::invalid();
+		if (sparse[e.index()] == --sz)
 			return;
 
-		entity_t back = dense[sz];
-		dense[sparse[e.index]] = back;
-		std::memcpy((void*)&data[sparse[e.index] * elt_sz], (void*)&data[sparse[back.index] * elt_sz], elt_sz);
-		sparse[back.index] = sparse[e.index];
+		E back = dense[sz];
+		dense[sparse[e.index()]] = back;
+		std::memcpy((void*)&data[sparse[e.index()] * elt_sz], (void*)&data[sparse[back.index()] * elt_sz], elt_sz);
+		sparse[back.index()] = sparse[e.index()];
 	}
 
 	template<typename C>
@@ -128,15 +128,15 @@ public:
 		return (C*)data;
 	}
 
-	entity_t* any_entities()
+	E* any_entities()
 	{
 		return dense;
 	}
 
 	template<typename C>
-	std::pair<entity_t*, C*> any_pair()
+	std::pair<E*, C*> any_pair()
 	{
-		return std::pair<entity_t*, C*>(dense, (C*)data);
+		return std::pair<E*, C*>(dense, (C*)data);
 	}
 
 	size_t size() const
@@ -152,7 +152,7 @@ public:
 		std::printf("]\ndense:  [");
 		for (size_t i = 0; i < max_elts; i++) {
 			std::printf(" %zu->", i);
-			if (dense[i] == entity_t::invalid()) {
+			if (dense[i] == E::invalid()) {
 				std::printf("? ");
 			} else {
 				std::printf("%zu ", dense[i].index);
@@ -163,7 +163,7 @@ public:
 
 private:
 	uint8_t *data;
-	entity_t* dense;
+	E* dense;
 	size_t *sparse;
 	size_t sz;
 	const size_t elt_sz;

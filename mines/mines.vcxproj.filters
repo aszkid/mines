@@ -39,6 +39,9 @@
     <ClCompile Include="..\..\..\..\Desktop\dev\opengl-3.3-core\src\glad.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="AssetManager.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="EntityManager.h">
@@ -72,6 +75,12 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="Triangle.h">
+      <Filter>Header Files\components</Filter>
+    </ClInclude>
+    <ClInclude Include="AssetManager.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="RenderMesh.h">
       <Filter>Header Files\components</Filter>
     </ClInclude>
   </ItemGroup>

@@ -4,15 +4,19 @@
 
 struct entity_t {
 	uint32_t generation : 8;
-	uint32_t index : 24;
+	uint32_t idx : 24;
 
-	operator uint32_t (void) const
+	inline operator uint32_t (void) const
 	{
-		return (generation << 24) | index;
+		return (generation << 24) | idx;
 	}
 
 	inline static entity_t invalid() {
 		return { 0xff, 0xffffff };
+	}
+
+	inline uint32_t index() const {
+		return idx;
 	}
 };
 

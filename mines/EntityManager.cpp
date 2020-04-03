@@ -15,7 +15,7 @@ void entity_manager_t::new_entity(entity_t* es, size_t ct)
 		es[i] = free_entities.front();
 		es[i].generation++;
 		free_entities.pop_front();
-		entities[es[i].index] = es[i];
+		entities[es[i].idx] = es[i];
 		i++;
 	}
 
@@ -29,7 +29,7 @@ void entity_manager_t::new_entity(entity_t* es, size_t ct)
 void entity_manager_t::free_entity(entity_t* es, size_t ct)
 {
 	for (size_t i = 0; i < ct; i++) {
-		if (es[i] != entities[es[i].index])
+		if (es[i] != entities[es[i].idx])
 			continue;
 		free_entities.push_back(es[i]);
 	}
@@ -54,7 +54,7 @@ void entity_manager_t::materialize()
 	for (auto& chlog : changelogs) {
 		uint32_t cID = chlog.first;
 		state_stream_t* ss = &chlog.second;
-		packed_array_t* store = get_store_or_default(cID, ss->csize);
+		packed_array_t<entity_t>* store = get_store_or_default(cID, ss->csize);
 		for (auto& msg : ss->events) {
 			switch (msg.type) {
 			case state_msg_header_t::C_UPDATE:

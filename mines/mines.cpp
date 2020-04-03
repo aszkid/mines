@@ -10,9 +10,8 @@
 #include "RenderSystem.h"
 #include "InputSystem.h"
 
-#include "Position.h"
-#include "Velocity.h"
 #include "Triangle.h"
+#include "RenderMesh.h"
 
 int main(int argc, char **argv)
 {
@@ -24,6 +23,13 @@ int main(int argc, char **argv)
 
     render_system_t render_sys(&ctx);
     input_system_t input_sys(&ctx);
+    asset_manager_t assets;
+
+    const asset_t cube_mesh("/cube.obj"_hash);
+    const asset_t blank_material("/blank.mat"_hash);
+    // preload assets
+    assets.load(cube_mesh, nullptr);
+    assets.load(blank_material, nullptr);
 
     entity_t tris[4];
     ctx.emgr.new_entity(tris, 4);
@@ -47,6 +53,12 @@ int main(int argc, char **argv)
        -1.0f,  -1.0f, 0.0f,
         0.0f,  -1.0f, 0.0f,
         -0.5f,  0.0f, 0.0f,
+    });
+
+    entity_t player;
+    ctx.emgr.new_entity(&player, 1);
+    ctx.emgr.insert_component<RenderMesh>(player, {
+        cube_mesh, blank_material
     });
 
     if (render_sys.init() != 0)

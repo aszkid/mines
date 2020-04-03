@@ -154,12 +154,14 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="..\..\..\..\Desktop\dev\opengl-3.3-core\src\glad.c" />
+    <ClCompile Include="AssetManager.cpp" />
     <ClCompile Include="EntityManager.cpp" />
     <ClCompile Include="InputSystem.cpp" />
     <ClCompile Include="mines.cpp" />
     <ClCompile Include="RenderSystem.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="AssetManager.h" />
     <ClInclude Include="Context.h" />
     <ClInclude Include="Entity.h" />
     <ClInclude Include="EntityManager.h" />
@@ -168,6 +170,7 @@
     <ClInclude Include="PackedArray.h" />
     <ClInclude Include="PackedStore.h" />
     <ClInclude Include="Position.h" />
+    <ClInclude Include="RenderMesh.h" />
     <ClInclude Include="RenderSystem.h" />
     <ClInclude Include="Triangle.h" />
     <ClInclude Include="Velocity.h" />
