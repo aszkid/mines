@@ -41,7 +41,19 @@ public:
 	void load(const asset_t asset, uint8_t *data);
 	void release(const asset_t asset);
 	uint8_t* allocate_chunk(const asset_t asset, const size_t sz);
+
+	template<typename T>
+	inline T* allocate_chunk(const asset_t asset, const size_t count)
+	{
+		return (T*)allocate_chunk(asset, count * sizeof(T));
+	}
 	uint8_t* get(const asset_t asset);
+
+	template<typename T>
+	inline T* get(const asset_t asset)
+	{
+		return (T*)get(asset);
+	}
 private:
 	std::unordered_map<asset_t, uint8_t*, asset_hash_f> map;
 	std::unordered_map<asset_t, std::vector<uint8_t*>, asset_hash_f> chunks;

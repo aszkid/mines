@@ -26,34 +26,10 @@ int main(int argc, char **argv)
     render_system_t render_sys(&ctx);
     input_system_t input_sys(&ctx);
 
-    // preload assets
+    // load assets
     const asset_t monkey("/mesh/monkey"_hash);
     if (load_mesh(&ctx.assets, monkey, "./monkey.obj") != 0)
         return EXIT_FAILURE;
-
-    entity_t tris[4];
-    ctx.emgr.new_entity(tris, 4);
-
-    ctx.emgr.insert_component<Triangle>(tris[0], {
-     -1.0f,  0.0f, 0.0f,
-        0.0f,  0.0f, 0.0f,
-        -0.5f,  1.0f, 0.0f,
-    });
-    ctx.emgr.insert_component<Triangle>(tris[1], {
-       0.0f,  -1.0f, 0.0f,
-       1.0f,  -1.0f, 0.0f,
-       0.5f,  0.0f, 0.0f,
-    });
-    ctx.emgr.insert_component<Triangle>(tris[2], {
-       0.0f,  0.0f, 0.0f,
-       1.0f,  0.0f, 0.0f,
-       0.5f,  1.0f, 0.0f,
-    });
-    ctx.emgr.insert_component<Triangle>(tris[3], {
-       -1.0f,  -1.0f, 0.0f,
-        0.0f,  -1.0f, 0.0f,
-        -0.5f,  0.0f, 0.0f,
-    });
 
     entity_t foo;
     ctx.emgr.new_entity(&foo, 1);

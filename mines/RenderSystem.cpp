@@ -2,6 +2,7 @@
 #include "Context.h"
 #include "Triangle.h"
 #include "RenderMesh.h"
+#include "Mesh.h"
 #include <cstdio>
 
 enum STATUS {
@@ -151,101 +152,65 @@ int render_system_t::init()
     return status;
 }
 
-void render_system_t::handle_new(entity_t e)
+static void handle_new_rendermesh(render_system_t* sys, entity_t e)
 {
-    Triangle* t = &ctx->emgr.get_component<Triangle>(e);
-    cmd_t cmd;
-    // generate VBO and VAO
+    RenderMesh* rm = &sys->ctx->emgr.get_component<RenderMesh>(e);
+    Mesh* mesh = sys->ctx->assets.get<Mesh>(rm->mesh);
+    std::printf("[render] creating render mesh with %zu vertices...\n", mesh->num_verts);
+
+    render_system_t::cmd_t cmd;
     glGenVertexArrays(1, &cmd.vao);
     glGenBuffers(1, &cmd.vbo);
-    // bind VAO, start describing it
+
     glBindVertexArray(cmd.vao);
-    // has a VBO bound
     glBindBuffer(GL_ARRAY_BUFFER, cmd.vbo);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(Triangle), t, GL_STATIC_DRAW);
-    // enable and set first vertex attribute (position)
+    glBufferData(GL_ARRAY_BUFFER, sizeof(Mesh::Vertex) * mesh->num_verts, mesh->vertices, GL_STATIC_DRAW);
+
     glEnableVertexAttribArray(0);
-    glVertexAttribPointer(
-        0, //first vertex attribute
-        3, // has 3 components
-        GL_FLOAT, // each of type GL_FLOAT
-        GL_FALSE, // should not be normalized
-        3 * sizeof(float), // space between consecutive attributes
-        nullptr // offset of the first attribute in the buffer
-    ); 
-    
-    cmds.emplace(e, cmd);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Mesh::Vertex), (void*)0);
+    glEnableVertexAttribArray(1);
+    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(Mesh::Vertex), (void*)offsetof(Mesh::Vertex, Mesh::Vertex::nx));
+
+    cmd.num_verts = mesh->num_verts;
+    sys->cmds.emplace(e, cmd);
 }
 
-void render_system_t::handle_update(entity_t e)
+static void handle_update_rendermesh(render_system_t* sys, entity_t e)
 {
-    cmd_t& cmd = cmds.get<cmd_t>(e);
-    Triangle* t = &ctx->emgr.get_component<Triangle>(e);
-    glBindBuffer(GL_ARRAY_BUFFER, cmd.vbo);
-    glBufferSubData(
-        GL_ARRAY_BUFFER,
-        0,
-        sizeof(Triangle),
-        t
-    );
 }
 
-void render_system_t::handle_delete(entity_t e)
+static void handle_delete_rendermesh(render_system_t* sys, entity_t e)
 {
-    if (!cmds.has(e))
-        return;
-    cmd_t& cmd = cmds.get<cmd_t>(e);
-    glDeleteBuffers(1, &cmd.vbo);
-    glDeleteVertexArrays(1, &cmd.vao);
-    cmds.remove(e);
 }
 
 void render_system_t::render()
 {
-    // process backlogged events
-    state_stream_t* ss = ctx->emgr.get_state_stream<Triangle>();
-    for (auto& msg : ss->events_back) {
-        // can safely access components directly: these changes
-        // have been materialized by the entity manager
-        switch (msg.type) {
-        case state_msg_header_t::C_NEW:
-            handle_new(msg.e);
-            break;
-        case state_msg_header_t::C_UPDATE:
-            handle_update(msg.e);
-            break;
-        case state_msg_header_t::C_DELETE:
-            handle_delete(msg.e);
-            break;
-        }
-    }
-
-    // process RenderMesh events
-    ss = ctx->emgr.get_state_stream<RenderMesh>();
+    // process RenderMesh changes
+    state_stream_t *ss = ctx->emgr.get_state_stream<RenderMesh>();
     for (auto& msg : ss->events_back) {
         switch (msg.type) {
         case state_msg_header_t::C_NEW:
-            std::printf("[render] new RenderMesh!\n");
+            handle_new_rendermesh(this, msg.e);
             break;
         case state_msg_header_t::C_UPDATE:
-            std::printf("[render] update RenderMesh\n");
+            handle_update_rendermesh(this, msg.e);
             break;
         case state_msg_header_t::C_DELETE:
-            std::printf("[render] delete RenderMesh\n");
+            handle_delete_rendermesh(this, msg.e);
             break;
         }
     }
 
     /////////////////////////////////
-    // render here
+    // render stuff
     glClear(GL_COLOR_BUFFER_BIT);
     glUseProgram(shader);
     cmd_t* cmd_arr = cmds.any<cmd_t>();
     for (size_t i = 0; i < cmds.size(); i++) {
         auto& cmd = cmd_arr[i];
         glBindVertexArray(cmd.vao);
-        glDrawArrays(GL_TRIANGLES, 0, 3);
+        glDrawArrays(GL_TRIANGLES, 0, cmd.num_verts);
     }
-    /////////////////////////////////
     SDL_GL_SwapWindow(ctx->win);
+    /////////////////////////////////
 }

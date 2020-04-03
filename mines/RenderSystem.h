@@ -11,10 +11,10 @@ struct context_t;
 // TODO: consider using the pimpl idiom
 //  to abstract the implementation
 //////////////////////////////////////////////
-class render_system_t {
-public:
+struct render_system_t {
 	struct cmd_t {
 		GLuint vao, vbo;
+		size_t num_verts;
 	};
 
 	render_system_t(context_t* ctx);
@@ -24,14 +24,8 @@ public:
 	void render();
 
 	packed_array_t<entity_t> cmds;
-private:
 	int status;
 	context_t* ctx;
 	GLuint shader;
-
-	void handle_new(entity_t e);
-	void handle_update(entity_t e);
-	void handle_delete(entity_t e);
-
 };
 

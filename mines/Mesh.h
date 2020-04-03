@@ -3,7 +3,10 @@
 #include <assimp/scene.h>
 
 struct Mesh {
+	struct Vertex {
+		float x, y, z;
+		float nx, ny, nz;
+	};
 	size_t num_verts;
-	aiVector3D* vertices;
-	aiVector3D* normals;
+	Vertex *vertices;
 };

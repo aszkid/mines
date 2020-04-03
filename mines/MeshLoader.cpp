@@ -20,13 +20,16 @@ static int load_mesh(asset_manager_t *amgr, asset_t id, const char* path)
     aiNode* node = scene->mRootNode->mChildren[0];
     aiMesh* mesh = scene->mMeshes[node->mMeshes[0]];
 
-    aiVector3D *data = (aiVector3D*)amgr->allocate_chunk(id, 2 * sizeof(aiVector3D) * mesh->mNumVertices);
-    mesh_->vertices = data;
-    mesh_->normals = data + mesh->mNumVertices;
-
-    std::memcpy(mesh_->vertices, mesh->mVertices, sizeof(aiVector3D) * mesh->mNumVertices);
-    std::memcpy(mesh_->normals, mesh->mNormals, sizeof(aiVector3D) * mesh->mNumVertices);
     mesh_->num_verts = mesh->mNumVertices;
+    mesh_->vertices = amgr->allocate_chunk<Mesh::Vertex>(id, mesh->mNumVertices);
+    for (size_t i = 0; i < mesh->mNumVertices; i++) {
+        mesh_->vertices[i].x = mesh->mVertices[i].x;
+        mesh_->vertices[i].y = mesh->mVertices[i].y;
+        mesh_->vertices[i].z = mesh->mVertices[i].z;
+        mesh_->vertices[i].nx = mesh->mNormals[i].x;
+        mesh_->vertices[i].ny = mesh->mNormals[i].y;
+        mesh_->vertices[i].nz = mesh->mNormals[i].z;
+    }
 
     return 0;
 }
