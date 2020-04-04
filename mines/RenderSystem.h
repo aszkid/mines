@@ -17,10 +17,10 @@ struct render_system_t {
 	};
 
 	render_system_t(context_t* ctx);
-	~render_system_t();
 
 	int init();
 	void render(entity_t camera);
+	void teardown();
 
 	packed_array_t<entity_t> cmds;
 	int status;

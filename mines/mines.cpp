@@ -38,7 +38,7 @@ int main(int argc, char **argv)
     ctx.emgr.new_entity(foos, n_foos);
     for (size_t i = 0; i < n_foos; i++) {
         ctx.emgr.insert_component<RenderMesh>(foos[i], {
-            monkey, 0
+            monkey, glm::vec3(0.f, 0.f, 1.f)
         });
         ctx.emgr.insert_component<Position>(foos[i], {
             glm::vec3(3.5f * (float)(i / w), 0.f, - 3.f * (float)(i % w))
@@ -77,6 +77,8 @@ int main(int argc, char **argv)
             break;
         render_sys.render(camera);
     }
+
+    render_sys.teardown();
 
     return EXIT_SUCCESS;
 }

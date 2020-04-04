@@ -25,7 +25,7 @@ render_system_t::render_system_t(context_t* ctx)
 {
 }
 
-render_system_t::~render_system_t()
+void render_system_t::teardown()
 {
     switch (status) {
     case RS_UP:
@@ -133,6 +133,8 @@ int render_system_t::init()
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
     SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
     SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24); // ?
+    SDL_GL_SetAttribute(SDL_GL_MULTISAMPLEBUFFERS, 1);
+    SDL_GL_SetAttribute(SDL_GL_MULTISAMPLESAMPLES, 4);
 
     ctx->gl_ctx = SDL_GL_CreateContext(ctx->win);
     if (ctx->gl_ctx == nullptr) {
@@ -154,6 +156,7 @@ int render_system_t::init()
     }
 
     glEnable(GL_DEPTH_TEST);
+    glEnable(GL_MULTISAMPLE);
     glClearColor(0.5f, 0.f, 0.f, 1.f);
 
     shader = load_shader("./phong.vert", "./phong.frag");
@@ -231,9 +234,8 @@ void render_system_t::render(entity_t camera)
     // set uniform values
     glUniformMatrix4fv(projection_loc, 1, GL_FALSE, glm::value_ptr(projection));
     glUniformMatrix4fv(view_loc, 1, GL_FALSE, glm::value_ptr(view));
-    glUniform3f(lightpos_loc, 0.f, 2.f, 2.f);
+    glUniform3f(lightpos_loc, 8.f, 20.f, 8.f);
     glUniform3f(lightcol_loc, 1.f, 1.f, 1.f);
-    glUniform3f(objectcol_loc, 0.f, 0.f, 1.f);
     glUniform3f(viewpos_loc, cam->pos.x, cam->pos.y, cam->pos.z);
 
     std::pair<entity_t*, cmd_t*> cmd_arr = cmds.any_pair<cmd_t>();
@@ -245,6 +247,8 @@ void render_system_t::render(entity_t camera)
             Position& pos = ctx->emgr.get_component<Position>(e);
             model = glm::translate(model, pos.pos);
         }
+        RenderMesh& rm = ctx->emgr.get_component<RenderMesh>(e);
+        glUniform3f(objectcol_loc, rm.color.x, rm.color.y, rm.color.z);
         glUniformMatrix4fv(model_loc, 1, GL_FALSE, glm::value_ptr(model));
         glBindVertexArray(cmd.vao);
         glDrawArrays(GL_TRIANGLES, 0, cmd.num_verts);

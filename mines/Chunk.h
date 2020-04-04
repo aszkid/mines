@@ -6,7 +6,7 @@ struct chunk_t {
 	uint32_t x, y, z; // unique chunk identifier (x, y, z)
 	struct block_t {
 		enum {
-			AIR, SAND, GRASS
+			AIR, SAND, GRASS, ROCK
 		};
 		uint8_t type;
 	};
