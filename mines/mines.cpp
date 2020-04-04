@@ -7,6 +7,7 @@
 #include "RenderSystem.h"
 #include "InputSystem.h"
 #include "CameraSystem.h"
+#include "MapSystem.h"
 
 #include "Position.h"
 #include "RenderMesh.h"
@@ -25,6 +26,7 @@ int main(int argc, char **argv)
     render_system_t render_sys(&ctx);
     input_system_t input_sys(&ctx);
     camera_system_t camera_sys(&ctx);
+    map_system_t map_sys(&ctx);
 
     const asset_t monkey("/mesh/monkey"_hash);
     if (load_mesh(&ctx.assets, monkey, "./monkey.obj") != 0)
@@ -55,6 +57,8 @@ int main(int argc, char **argv)
     if (render_sys.init() != 0)
         return EXIT_FAILURE;
 
+    map_sys.init();
+
     uint32_t prev = SDL_GetTicks();
     uint32_t delta;
     while (!quit) {
@@ -68,6 +72,7 @@ int main(int argc, char **argv)
 
         // run systems
         camera_sys.update(camera);
+        map_sys.update();
         if (input_sys.update() != 0)
             break;
         render_sys.render(camera);

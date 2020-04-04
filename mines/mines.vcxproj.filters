@@ -22,6 +22,9 @@
     <Filter Include="Header Files\assets">
       <UniqueIdentifier>{70875d5a-6fa9-4ceb-9ed4-6a96474a510b}</UniqueIdentifier>
     </Filter>
+    <Filter Include="shaders">
+      <UniqueIdentifier>{59aaff99-ce0a-4ed8-a9cb-4c9a0fb76464}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="mines.cpp">
@@ -40,6 +43,9 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="MeshLoader.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="MapSystem.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
@@ -89,16 +95,31 @@
     <ClInclude Include="CameraSystem.h">
       <Filter>Header Files\systems</Filter>
     </ClInclude>
+    <ClInclude Include="Chunk.h">
+      <Filter>Header Files\components</Filter>
+    </ClInclude>
+    <ClInclude Include="MapSystem.h">
+      <Filter>Header Files\systems</Filter>
+    </ClInclude>
+    <ClInclude Include="resource.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <None Include="INFO.md">
       <Filter>Resource Files</Filter>
     </None>
-    <None Include="phong.vert">
-      <Filter>Resource Files</Filter>
-    </None>
     <None Include="phong.frag">
-      <Filter>Resource Files</Filter>
+      <Filter>shaders</Filter>
+    </None>
+    <None Include="phong.vert">
+      <Filter>shaders</Filter>
+    </None>
+    <None Include="block.vert">
+      <Filter>shaders</Filter>
+    </None>
+    <None Include="block.frag">
+      <Filter>shaders</Filter>
     </None>
   </ItemGroup>
 </Project>
