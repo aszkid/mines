@@ -4,6 +4,7 @@
 #include "RenderMesh.h"
 #include "Mesh.h"
 #include "Camera.h"
+#include "Position.h"
 #include <cstdio>
 #include <glm/mat4x4.hpp>
 #include <glm/gtc/matrix_transform.hpp>
@@ -20,7 +21,7 @@ enum STATUS {
 };
 
 render_system_t::render_system_t(context_t* ctx)
-    : ctx(ctx), status(RS_DOWN), cmds(sizeof(cmd_t), 16)
+    : ctx(ctx), status(RS_DOWN), cmds(sizeof(cmd_t), 4096)
 {
 }
 
@@ -211,7 +212,6 @@ void render_system_t::render(entity_t camera)
     }
 
     Camera* cam = &ctx->emgr.get_component<Camera>(camera);
-    glm::mat4 model = glm::mat4(1.f);
     glm::mat4 view = glm::lookAt(cam->pos, cam->pos + cam->look(), cam->up);
     glm::mat4 projection = glm::perspectiveFov(cam->fov, (float)ctx->width, (float)ctx->height, 0.1f, 100.f);
 
@@ -230,16 +230,22 @@ void render_system_t::render(entity_t camera)
 
     // set uniform values
     glUniformMatrix4fv(projection_loc, 1, GL_FALSE, glm::value_ptr(projection));
-    glUniformMatrix4fv(model_loc, 1, GL_FALSE, glm::value_ptr(model));
     glUniformMatrix4fv(view_loc, 1, GL_FALSE, glm::value_ptr(view));
     glUniform3f(lightpos_loc, 0.f, 2.f, 2.f);
     glUniform3f(lightcol_loc, 1.f, 1.f, 1.f);
     glUniform3f(objectcol_loc, 0.f, 0.f, 1.f);
     glUniform3f(viewpos_loc, cam->pos.x, cam->pos.y, cam->pos.z);
 
-    cmd_t* cmd_arr = cmds.any<cmd_t>();
+    std::pair<entity_t*, cmd_t*> cmd_arr = cmds.any_pair<cmd_t>();
     for (size_t i = 0; i < cmds.size(); i++) {
-        auto& cmd = cmd_arr[i];
+        auto& cmd = cmd_arr.second[i];
+        entity_t e = cmd_arr.first[i];
+        glm::mat4 model = glm::mat4(1.f);
+        if (ctx->emgr.has_component<Position>(e)) {
+            Position& pos = ctx->emgr.get_component<Position>(e);
+            model = glm::translate(model, pos.pos);
+        }
+        glUniformMatrix4fv(model_loc, 1, GL_FALSE, glm::value_ptr(model));
         glBindVertexArray(cmd.vao);
         glDrawArrays(GL_TRIANGLES, 0, cmd.num_verts);
     }

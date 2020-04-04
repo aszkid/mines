@@ -8,7 +8,7 @@
 #include "InputSystem.h"
 #include "CameraSystem.h"
 
-#include "Triangle.h"
+#include "Position.h"
 #include "RenderMesh.h"
 #include "Camera.h"
 
@@ -30,18 +30,25 @@ int main(int argc, char **argv)
     if (load_mesh(&ctx.assets, monkey, "./monkey.obj") != 0)
         return EXIT_FAILURE;
 
-    entity_t foo;
-    ctx.emgr.new_entity(&foo, 1);
-    ctx.emgr.insert_component<RenderMesh>(foo, {
-        monkey, 0
-    });
+    const size_t w = 20;
+    const size_t n_foos = w * w;
+    entity_t foos[n_foos];
+    ctx.emgr.new_entity(foos, n_foos);
+    for (size_t i = 0; i < n_foos; i++) {
+        ctx.emgr.insert_component<RenderMesh>(foos[i], {
+            monkey, 0
+        });
+        ctx.emgr.insert_component<Position>(foos[i], {
+            glm::vec3(3.5f * (float)(i / w), 0.f, - 3.f * (float)(i % w))
+        });
+    }
 
     entity_t camera;
     ctx.emgr.new_entity(&camera, 1);
     ctx.emgr.insert_component<Camera>(camera, {
         glm::vec3(0.f, 0.f, 3.f),   // position
         glm::vec3(0.f, 1.f, 0.f),   // up
-        0.f, -80.f, 0.f,            // pitch, yaw, roll
+        0.f, -90.f, 0.f,            // pitch, yaw, roll
         45.f                        // fov
     });
 

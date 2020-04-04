@@ -127,6 +127,15 @@ public:
 	}
 
 	template<typename C>
+	bool has_component(entity_t e)
+	{
+		auto it = stores.find(C::id());
+		if (it == stores.end())
+			return false;
+		return it->second.has(e);
+	}
+
+	template<typename C>
 	collection_t<C*> any(const uint32_t cID)
 	{
 		auto it = stores.find(cID);
@@ -191,7 +200,7 @@ private:
 	{
 		auto it = stores.find(cID);
 		if (it == stores.end()) {
-			it = stores.emplace(cID, packed_array_t<entity_t>(elt_sz, 8)).first;
+			it = stores.emplace(cID, packed_array_t<entity_t>(elt_sz, 4096)).first;
 		}
 		return &it->second;
 	}
