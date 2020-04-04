@@ -16,9 +16,6 @@
     <Filter Include="Header Files\components">
       <UniqueIdentifier>{de759574-3db2-4366-afd6-d3a83d939d59}</UniqueIdentifier>
     </Filter>
-    <Filter Include="Header Files\stores">
-      <UniqueIdentifier>{70a85e92-4597-4d93-bbd2-8e420241cb00}</UniqueIdentifier>
-    </Filter>
     <Filter Include="Header Files\systems">
       <UniqueIdentifier>{223b61dd-e842-4176-9b01-041814098166}</UniqueIdentifier>
     </Filter>
@@ -52,9 +49,6 @@
     </ClInclude>
     <ClInclude Include="Context.h">
       <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="PackedStore.h">
-      <Filter>Header Files\stores</Filter>
     </ClInclude>
     <ClInclude Include="InputSystem.h">
       <Filter>Header Files\systems</Filter>

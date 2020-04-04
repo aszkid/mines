@@ -39,20 +39,20 @@ int main(int argc, char **argv)
     entity_t camera;
     ctx.emgr.new_entity(&camera, 1);
     ctx.emgr.insert_component<Camera>(camera, {
-        glm::vec3(0.f, 0.f, 3.f),
-        glm::vec3(0.f, 1.f, 0.f),
-        glm::vec3(0.f, 0.f, -1.f),
-        45.f
+        glm::vec3(0.f, 0.f, 3.f),   // position
+        glm::vec3(0.f, 1.f, 0.f),   // up
+        0.f, -80.f, 0.f,            // pitch, yaw, roll
+        45.f                        // fov
     });
 
     if (render_sys.init() != 0)
         return EXIT_FAILURE;
 
     uint32_t prev = SDL_GetTicks();
-    uint32_t delta, now;
+    uint32_t delta;
     while (!quit) {
         // update frame time
-        now = SDL_GetTicks();
+        uint32_t now = SDL_GetTicks();
         ctx.delta = now - prev;
         prev = now;
 

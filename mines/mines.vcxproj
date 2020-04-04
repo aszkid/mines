@@ -177,7 +177,6 @@
     <ClInclude Include="InputSystem.h" />
     <ClInclude Include="Mesh.h" />
     <ClInclude Include="PackedArray.h" />
-    <ClInclude Include="PackedStore.h" />
     <ClInclude Include="Position.h" />
     <ClInclude Include="RenderMesh.h" />
     <ClInclude Include="RenderSystem.h" />

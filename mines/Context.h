@@ -15,4 +15,5 @@ struct context_t {
 
     // time last frame was in flight
     uint32_t delta;
+    uint32_t mouse_last_mode;
 };
