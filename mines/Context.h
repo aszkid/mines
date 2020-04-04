@@ -12,4 +12,7 @@ struct context_t {
 
     entity_manager_t emgr;
     asset_manager_t assets;
+
+    // time last frame was in flight
+    uint32_t delta;
 };

@@ -162,7 +162,6 @@
     <ClCompile Include="..\..\..\..\Desktop\dev\opengl-3.3-core\src\glad.c" />
     <ClCompile Include="AssetManager.cpp" />
     <ClCompile Include="EntityManager.cpp" />
-    <ClCompile Include="InputSystem.cpp" />
     <ClCompile Include="MeshLoader.cpp" />
     <ClCompile Include="mines.cpp" />
     <ClCompile Include="RenderSystem.cpp" />
@@ -170,6 +169,7 @@
   <ItemGroup>
     <ClInclude Include="AssetManager.h" />
     <ClInclude Include="Camera.h" />
+    <ClInclude Include="CameraSystem.h" />
     <ClInclude Include="Context.h" />
     <ClInclude Include="Entity.h" />
     <ClInclude Include="EntityManager.h" />

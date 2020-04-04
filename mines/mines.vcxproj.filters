@@ -36,9 +36,6 @@
     <ClCompile Include="RenderSystem.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="InputSystem.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="..\..\..\..\Desktop\dev\opengl-3.3-core\src\glad.c">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -94,6 +91,9 @@
     </ClInclude>
     <ClInclude Include="Camera.h">
       <Filter>Header Files\components</Filter>
+    </ClInclude>
+    <ClInclude Include="CameraSystem.h">
+      <Filter>Header Files\systems</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

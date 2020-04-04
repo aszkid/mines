@@ -212,7 +212,7 @@ void render_system_t::render(entity_t camera)
 
     Camera* cam = &ctx->emgr.get_component<Camera>(camera);
     glm::mat4 model = glm::mat4(1.f);
-    glm::mat4 view = glm::lookAt(cam->pos, cam->look, cam->up);
+    glm::mat4 view = glm::lookAt(cam->pos, cam->pos + cam->look, cam->up);
     glm::mat4 projection = glm::perspectiveFov(cam->fov, (float)ctx->width, (float)ctx->height, 0.1f, 100.f);
 
     /////////////////////////////////
