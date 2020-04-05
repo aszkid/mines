@@ -129,7 +129,7 @@ void map_system_t::init()
 	asset_t mesh = "BlockMesh"_hash;
 	std::vector<tmp_block_t> blocks;
 
-	const size_t N = 64;
+	const size_t N = 32;
 	HastyNoise::loadSimd("./");
 	size_t fastestSIMD = HastyNoise::GetFastestSIMD();
 	auto noise = HastyNoise::CreateNoise(seed, fastestSIMD);

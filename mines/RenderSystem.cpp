@@ -1,17 +1,22 @@
 #include "RenderSystem.h"
+
+// general
 #include "Context.h"
-#include "Triangle.h"
-#include "RenderMesh.h"
-#include "IndexedRenderMesh.h"
-#include "Mesh.h"
-#include "IndexedMesh.h"
-#include "Camera.h"
-#include "Position.h"
 #include <cstdio>
+#include <fstream>
 #include <glm/mat4x4.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
-#include <fstream>
+
+// components
+#include "RenderMesh.h"
+#include "IndexedRenderMesh.h"
+#include "Camera.h"
+#include "Position.h"
+
+// assets
+#include "Mesh.h"
+#include "IndexedMesh.h"
 
 enum STATUS {
     RS_UP = 0,
@@ -27,12 +32,32 @@ render_system_t::render_system_t(context_t* ctx)
 {
 }
 
+static void cleanup(render_system_t *sys)
+{
+    glDeleteProgram(sys->shader);
+
+    render_system_t::cmd_t* cmds = sys->cmds.any<render_system_t::cmd_t>();
+    for (size_t i = 0; i < sys->cmds.size(); i++) {
+        auto& cmd = cmds[i];
+        glDeleteBuffers(1, &cmd.vbo);
+        glDeleteVertexArrays(1, &cmd.vao);
+    }
+
+    render_system_t::indexed_cmd_t* idx_cmds = sys->indexed_cmds.any<render_system_t::indexed_cmd_t>();
+    for (size_t i = 0; i < sys->indexed_cmds.size(); i++) {
+        auto& cmd = idx_cmds[i];
+        glDeleteBuffers(1, &cmd.vbo);
+        glDeleteBuffers(1, &cmd.ebo);
+        glDeleteVertexArrays(1, &cmd.vao);
+    }
+}
+
 void render_system_t::teardown()
 {
     switch (status) {
     case RS_UP:
         // clean everything up!
-        glDeleteProgram(shader);
+        cleanup(this);
         SDL_GL_DeleteContext(ctx->gl_ctx);
     case RS_ERR_GLAD:
     case RS_ERR_GL:
@@ -277,7 +302,7 @@ void render_system_t::render(entity_t camera)
     // set uniform values
     glUniformMatrix4fv(projection_loc, 1, GL_FALSE, glm::value_ptr(projection));
     glUniformMatrix4fv(view_loc, 1, GL_FALSE, glm::value_ptr(view));
-    glUniform3f(lightpos_loc, -10.f, 64.f, -32.f);
+    glUniform3f(lightpos_loc, -10.f, 64.f, 32.f);
     glUniform3f(lightcol_loc, 1.f, 1.f, 1.f);
     glUniform3f(viewpos_loc, cam->pos.x, cam->pos.y, cam->pos.z);
 
