@@ -95,9 +95,6 @@
     <ClInclude Include="CameraSystem.h">
       <Filter>Header Files\systems</Filter>
     </ClInclude>
-    <ClInclude Include="Chunk.h">
-      <Filter>Header Files\components</Filter>
-    </ClInclude>
     <ClInclude Include="MapSystem.h">
       <Filter>Header Files\systems</Filter>
     </ClInclude>

@@ -173,7 +173,6 @@
     <ClInclude Include="AssetManager.h" />
     <ClInclude Include="Camera.h" />
     <ClInclude Include="CameraSystem.h" />
-    <ClInclude Include="Chunk.h" />
     <ClInclude Include="Context.h" />
     <ClInclude Include="Entity.h" />
     <ClInclude Include="EntityManager.h" />

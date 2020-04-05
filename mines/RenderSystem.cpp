@@ -227,16 +227,16 @@ static void handle_new_indexedrendermesh(render_system_t* sys, entity_t e)
 
     glBindVertexArray(cmd.vao);
     glBindBuffer(GL_ARRAY_BUFFER, cmd.vbo);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(Mesh::Vertex) * mesh->num_verts, mesh->vertices, GL_STATIC_DRAW);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(IndexedMesh::Vertex) * mesh->num_verts, mesh->vertices, GL_STATIC_DRAW);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, cmd.ebo);
     glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(unsigned int) * mesh->num_indices, mesh->indices, GL_STATIC_DRAW);
 
     glEnableVertexAttribArray(0);
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Mesh::Vertex), (void*)0);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(IndexedMesh::Vertex), (void*)0);
     glEnableVertexAttribArray(1);
-    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(Mesh::Vertex), (void*)offsetof(Mesh::Vertex, Mesh::Vertex::nx));
+    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(IndexedMesh::Vertex), (void*)offsetof(IndexedMesh::Vertex, IndexedMesh::Vertex::nx));
     glEnableVertexAttribArray(2);
-    glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, sizeof(Mesh::Vertex), (void*)offsetof(Mesh::Vertex, Mesh::Vertex::r));
+    glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, sizeof(IndexedMesh::Vertex), (void*)offsetof(IndexedMesh::Vertex, IndexedMesh::Vertex::r));
 
     cmd.num_verts = mesh->num_indices;
     sys->indexed_cmds.emplace(e, cmd);
@@ -250,6 +250,17 @@ static void handle_update_rendermesh(render_system_t* sys, entity_t e)
 static void handle_delete_rendermesh(render_system_t* sys, entity_t e)
 {
     // TODO
+}
+
+static void handle_update_indexedrendermesh(render_system_t* sys, entity_t e)
+{
+    std::printf("[render] updating indexed render mesh!\n");
+    IndexedRenderMesh* rm = &sys->ctx->emgr.get_component<IndexedRenderMesh>(e);
+    IndexedMesh* mesh = sys->ctx->assets.get<IndexedMesh>(rm->indexed_mesh);
+    render_system_t::indexed_cmd_t& cmd = sys->indexed_cmds.get<render_system_t::indexed_cmd_t>(e);
+
+    glBindBuffer(GL_ARRAY_BUFFER, cmd.vbo);
+    glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(IndexedMesh::Vertex) * mesh->num_verts, mesh->vertices);
 }
 
 void render_system_t::render(entity_t camera)
@@ -276,6 +287,9 @@ void render_system_t::render(entity_t camera)
         switch (msg.type) {
         case state_msg_header_t::C_NEW:
             handle_new_indexedrendermesh(this, msg.e);
+            break;
+        case state_msg_header_t::C_UPDATE:
+            handle_update_indexedrendermesh(this, msg.e);
             break;
         default:
             // TODO update and delete

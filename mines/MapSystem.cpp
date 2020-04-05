@@ -1,14 +1,23 @@
 #include "MapSystem.h"
-#include "Chunk.h"
 #include "Position.h"
+#include "Camera.h"
 #include <random>
 #include "Context.h"
 #include "IndexedMesh.h"
 #include "IndexedRenderMesh.h"
 #include <glm/glm.hpp>
 
+static const int CHUNK_SIZE = 8 * 2;
+
+struct chunk_t {
+	uint32_t x, y, z;
+	asset_t mesh_asset;
+	entity_t entity;
+};
+
+
 map_system_t::map_system_t(context_t* ctx)
-	: ctx(ctx), view_distance(0), seed(0)
+	: ctx(ctx), view_distance(0), seed(0), old_chunk_coord(0)
 {
 	n_chunks = 2 * view_distance + 1;
 	n_chunks = n_chunks * n_chunks * n_chunks;
@@ -27,10 +36,17 @@ struct tmp_block_t {
 
 static void generate_chunk_mesh(map_system_t* map, IndexedMesh *mesh, asset_t a, std::vector<tmp_block_t> &blocks)
 {
+	size_t old_num_verts = mesh->num_verts;
 	mesh->num_verts = 24 * blocks.size();
-	mesh->vertices = map->ctx->assets.allocate_chunk<IndexedMesh::Vertex>(a, mesh->num_verts);
 	mesh->num_indices = 36 * blocks.size();
-	mesh->indices = map->ctx->assets.allocate_chunk<unsigned int>(a, mesh->num_indices);
+
+	// allocate memory if needed
+	// !!!!!!!!! TODO remember to free the block if we need to reallocate! !!!!!!!!!!!!
+	if (mesh->num_verts > old_num_verts) {
+		mesh->vertices = map->ctx->assets.allocate_chunk<IndexedMesh::Vertex>(a, mesh->num_verts);
+		mesh->indices = map->ctx->assets.allocate_chunk<unsigned int>(a, mesh->num_indices);
+	}
+
 	IndexedMesh::Vertex* v = mesh->vertices;
 	unsigned int* i = mesh->indices;
 
@@ -112,16 +128,18 @@ static void generate_chunk_mesh(map_system_t* map, IndexedMesh *mesh, asset_t a,
 	}
 }
 
-static void generate_chunk(map_system_t *map, asset_t asset, IndexedMesh *mesh, int xStart, int yStart, int zStart, const size_t N)
+static void generate_chunk(map_system_t *map, asset_t asset, IndexedMesh *mesh, int xStart, int yStart, int zStart)
 {
+	const int tex_x = CHUNK_SIZE * xStart;
+	const int tex_y = CHUNK_SIZE * zStart;
+	const int tex_z = CHUNK_SIZE * yStart;
 	std::vector<tmp_block_t> blocks;
-	HastyNoise::FloatBuffer buffer = map->noise->GetNoiseSet(xStart, yStart, zStart, N, N, N);
+	HastyNoise::FloatBuffer buffer = map->noise->GetNoiseSet(tex_x, tex_y, tex_z, CHUNK_SIZE, CHUNK_SIZE, CHUNK_SIZE);
 
-	size_t idx = 0;
-	for (size_t x = 0; x < N; x++) {
-		for (size_t z = 0; z < N; z++) {
-			for (size_t y = 0; y < N; y++) {
-				float val = buffer.get()[x*N*N + z*N + y];
+	for (size_t x = 0; x < CHUNK_SIZE; x++) {
+		for (size_t z = 0; z < CHUNK_SIZE; z++) {
+			for (size_t y = 0; y < CHUNK_SIZE; y++) {
+				float val = buffer.get()[x * CHUNK_SIZE * CHUNK_SIZE + z * CHUNK_SIZE + y];
 				if (val > 0.f && val < .2f) {
 					//chunk.blocks[x][y][z].type = chunk_t::block_t::GRASS;
 					blocks.push_back({ glm::vec3(x, y, z), glm::vec3(0.f, 1.f, 0.f) });
@@ -133,7 +151,6 @@ static void generate_chunk(map_system_t *map, asset_t asset, IndexedMesh *mesh, 
 				else {
 					//chunk.blocks[x][y][z].type = chunk_t::block_t::AIR;
 				}
-				//idx++;
 			}
 		}
 	}
@@ -149,7 +166,16 @@ static uint32_t generate_seed()
 	return dis(gen);
 }
 
-void map_system_t::init()
+static glm::ivec3 get_chunk_pos(glm::vec3 world_pos)
+{
+	glm::ivec3 pos;
+	pos.x = static_cast<int>(std::floor(world_pos.x / static_cast<float>(CHUNK_SIZE)));
+	pos.y = -1;
+	pos.z = static_cast<int>(std::floor(world_pos.z / static_cast<float>(CHUNK_SIZE)));
+	return pos;
+}
+
+void map_system_t::init(entity_t camera)
 {
 	seed = generate_seed();
 	HastyNoise::loadSimd("./");
@@ -158,33 +184,37 @@ void map_system_t::init()
 	noise->SetFrequency(0.05f);
 
 	std::printf("[map] seed=%u\n", seed);
-	std::printf("[map] have %zu chunks in flight\n", n_chunks);
+	std::printf("[map] num_chunks=%zum, view_distance=%zu\n", n_chunks, view_distance);
 
-	//chunk_t chunk;
-	entity_t chunk_entities[4];
-	asset_t chunk_assets[4] = { "ChunkMesh1"_hash, "ChunkMesh2"_hash, "CM3"_hash, "CM4"_hash };
-	ctx->emgr.new_entity(chunk_entities, 4);
+	Camera& cam = ctx->emgr.get_component<Camera>(camera);
+	old_chunk_coord = get_chunk_pos(cam.pos);
+	std::printf("[map] player starts at chunk (%d, %d, %d)\n", old_chunk_coord.x, old_chunk_coord.y, old_chunk_coord.z);
 
-	IndexedMesh* mesh1 = ctx->assets.make<IndexedMesh>(chunk_assets[0]);
-	IndexedMesh* mesh2 = ctx->assets.make<IndexedMesh>(chunk_assets[1]);
-	IndexedMesh* mesh3 = ctx->assets.make<IndexedMesh>(chunk_assets[2]);
-	IndexedMesh* mesh4 = ctx->assets.make<IndexedMesh>(chunk_assets[3]);
+	chunks[0].mesh_asset = "ChunkMesh1"_hash;
+	ctx->emgr.new_entity(&chunks[0].entity, 1);
 
-	generate_chunk(this, chunk_assets[0], mesh1, 0, 0, 0, 32);
-	generate_chunk(this, chunk_assets[1], mesh2, 32, 0, 0, 32);
-	generate_chunk(this, chunk_assets[2], mesh3, 0, 32, 0, 32);
-	generate_chunk(this, chunk_assets[3], mesh4, 32, 32, 0, 32);
-	//ctx->emgr.insert_component<chunk_t>(chunk_entity, std::move(chunk));
-	ctx->emgr.insert_component<IndexedRenderMesh>(chunk_entities[0], { chunk_assets[0] });
-	ctx->emgr.insert_component<IndexedRenderMesh>(chunk_entities[1], { chunk_assets[1] });
-	ctx->emgr.insert_component<IndexedRenderMesh>(chunk_entities[2], { chunk_assets[2] });
-	ctx->emgr.insert_component<IndexedRenderMesh>(chunk_entities[3], { chunk_assets[3] });
-	ctx->emgr.insert_component<Position>(chunk_entities[0], { glm::vec3(-16.f, 0.f, -84.f) });
-	ctx->emgr.insert_component<Position>(chunk_entities[1], { glm::vec3(16.f, 0.f, -84.f) });
-	ctx->emgr.insert_component<Position>(chunk_entities[2], { glm::vec3(-16.f, 0.f, -52.f) });
-	ctx->emgr.insert_component<Position>(chunk_entities[3], { glm::vec3(16.f, 0.f, -52.f) });
+	IndexedMesh* mesh1 = ctx->assets.make<IndexedMesh>(chunks[0].mesh_asset);
+	mesh1->num_indices = 0;
+	mesh1->num_verts = 0;
+	generate_chunk(this, chunks[0].mesh_asset, mesh1, old_chunk_coord.x, old_chunk_coord.y, old_chunk_coord.z);
+	ctx->emgr.insert_component<IndexedRenderMesh>(chunks[0].entity, { chunks[0].mesh_asset });
+	ctx->emgr.insert_component<Position>(chunks[0].entity, {
+		(float)CHUNK_SIZE * glm::vec3(old_chunk_coord)
+	});
 }
 
-void map_system_t::update()
+void map_system_t::update(entity_t camera)
 {
+	Camera& cam = ctx->emgr.get_component<Camera>(camera);
+	glm::ivec3 chunk_coord = get_chunk_pos(cam.pos);
+	if (old_chunk_coord != chunk_coord) {
+		std::printf("[map] changing chunk to (%d, %d, %d)\n", chunk_coord.x, chunk_coord.y, chunk_coord.z);
+		old_chunk_coord = chunk_coord;
+		IndexedMesh* mesh1 = ctx->assets.get<IndexedMesh>(chunks[0].mesh_asset);
+		generate_chunk(this, chunks[0].mesh_asset, mesh1, chunk_coord.x, chunk_coord.y, chunk_coord.z);
+		ctx->emgr.insert_component<IndexedRenderMesh>(chunks[0].entity, { chunks[0].mesh_asset });
+		ctx->emgr.insert_component<Position>(chunks[0].entity, {
+			(float)CHUNK_SIZE * glm::vec3(old_chunk_coord)
+		});
+	}
 }
