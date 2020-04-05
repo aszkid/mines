@@ -2,11 +2,11 @@
 
 uniform vec3 lightPos;
 uniform vec3 lightColor;
-uniform vec3 objectColor;
 uniform vec3 viewPos;
 
 in vec3 normal;
 in vec3 fragpos;
+in vec3 objectColor;
 
 out vec4 color;
 

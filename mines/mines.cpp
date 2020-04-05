@@ -10,18 +10,17 @@
 #include "MapSystem.h"
 
 #include "Position.h"
+#include "Mesh.h"
 #include "RenderMesh.h"
 #include "Camera.h"
-
-#include "MeshLoader.cpp"
 
 int main(int argc, char **argv)
 {
     bool quit = false;
 
     context_t ctx;
-    ctx.width = 640;
-    ctx.height = 480;
+    ctx.width = 1280;
+    ctx.height = 720;
 
     render_system_t render_sys(&ctx);
     input_system_t input_sys(&ctx);
@@ -37,9 +36,7 @@ int main(int argc, char **argv)
     entity_t foos[n_foos];
     ctx.emgr.new_entity(foos, n_foos);
     for (size_t i = 0; i < n_foos; i++) {
-        ctx.emgr.insert_component<RenderMesh>(foos[i], {
-            monkey, glm::vec3(0.f, 0.f, 1.f)
-        });
+        ctx.emgr.insert_component<RenderMesh>(foos[i], { monkey });
         ctx.emgr.insert_component<Position>(foos[i], {
             glm::vec3(3.5f * (float)(i / w), 0.f, - 3.f * (float)(i % w))
         });
@@ -58,6 +55,8 @@ int main(int argc, char **argv)
         return EXIT_FAILURE;
 
     map_sys.init();
+
+    ctx.assets.print();
 
     uint32_t prev = SDL_GetTicks();
     uint32_t delta;

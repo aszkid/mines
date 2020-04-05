@@ -15,6 +15,10 @@ struct render_system_t {
 		GLuint vao, vbo;
 		size_t num_verts;
 	};
+	struct indexed_cmd_t {
+		GLuint vao, vbo, ebo;
+		size_t num_verts;
+	};
 
 	render_system_t(context_t* ctx);
 
@@ -23,6 +27,7 @@ struct render_system_t {
 	void teardown();
 
 	packed_array_t<entity_t> cmds;
+	packed_array_t<entity_t> indexed_cmds;
 	int status;
 	context_t* ctx;
 	GLuint shader;

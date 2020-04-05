@@ -4,7 +4,7 @@
 #include "AssetManager.h"
 #include "Mesh.h"
 
-static int load_mesh(asset_manager_t *amgr, asset_t id, const char* path)
+int load_mesh(asset_manager_t *amgr, asset_t id, const char* path)
 {
     Mesh* mesh_ = amgr->make<Mesh>(id);
 
@@ -29,6 +29,9 @@ static int load_mesh(asset_manager_t *amgr, asset_t id, const char* path)
         mesh_->vertices[i].nx = mesh->mNormals[i].x;
         mesh_->vertices[i].ny = mesh->mNormals[i].y;
         mesh_->vertices[i].nz = mesh->mNormals[i].z;
+        mesh_->vertices[i].r = 0.f;
+        mesh_->vertices[i].g = 0.f;
+        mesh_->vertices[i].b = 1.f;
     }
 
     return 0;

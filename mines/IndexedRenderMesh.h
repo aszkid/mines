@@ -4,10 +4,10 @@
 #include "hash.h"
 #include <glm/vec3.hpp>
 
-struct RenderMesh {
-	asset_t mesh;
+struct IndexedRenderMesh {
+	asset_t indexed_mesh;
 
 	static constexpr uint32_t id() {
-		return "RENDERMESH"_hash;
+		return "IndexedRenderMesh"_hash;
 	}
 };

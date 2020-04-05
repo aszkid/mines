@@ -178,6 +178,8 @@
     <ClInclude Include="Entity.h" />
     <ClInclude Include="EntityManager.h" />
     <ClInclude Include="hash.h" />
+    <ClInclude Include="IndexedMesh.h" />
+    <ClInclude Include="IndexedRenderMesh.h" />
     <ClInclude Include="InputSystem.h" />
     <ClInclude Include="MapSystem.h" />
     <ClInclude Include="Mesh.h" />

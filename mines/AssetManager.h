@@ -34,11 +34,10 @@ public:
 	T* make(const asset_t asset)
 	{
 		T* t = (T*)std::malloc(sizeof(T));
-		load(asset, (uint8_t*)t);
+		load(asset, (uint8_t*)t, sizeof(T));
 		return t;
 	}
 
-	void load(const asset_t asset, uint8_t *data);
 	void release(const asset_t asset);
 	uint8_t* allocate_chunk(const asset_t asset, const size_t sz);
 
@@ -54,8 +53,16 @@ public:
 	{
 		return (T*)get(asset);
 	}
+
+	void print();
 private:
-	std::unordered_map<asset_t, uint8_t*, asset_hash_f> map;
-	std::unordered_map<asset_t, std::vector<uint8_t*>, asset_hash_f> chunks;
+	void load(const asset_t asset, uint8_t* data, size_t sz);
+
+	struct sized_ptr_t {
+		uint8_t* ptr;
+		size_t sz;
+	};
+	std::unordered_map<asset_t, sized_ptr_t, asset_hash_f> map;
+	std::unordered_map<asset_t, std::vector<sized_ptr_t>, asset_hash_f> chunks;
 };
 
