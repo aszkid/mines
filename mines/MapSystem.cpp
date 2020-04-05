@@ -1,11 +1,11 @@
 #include "MapSystem.h"
 #include "Chunk.h"
+#include "Position.h"
 #include <random>
 #include "Context.h"
 #include "IndexedMesh.h"
 #include "IndexedRenderMesh.h"
 #include <glm/glm.hpp>
-#include <hastyNoise.h>
 
 map_system_t::map_system_t(context_t* ctx)
 	: ctx(ctx), view_distance(0), seed(0)
@@ -25,13 +25,12 @@ struct tmp_block_t {
 	glm::vec3 color;
 };
 
-static void generate_chunk_mesh(asset_manager_t *assets, asset_t a, std::vector<tmp_block_t> &blocks)
+static void generate_chunk_mesh(map_system_t* map, IndexedMesh *mesh, asset_t a, std::vector<tmp_block_t> &blocks)
 {
-	IndexedMesh* mesh = assets->make<IndexedMesh>(a);
 	mesh->num_verts = 24 * blocks.size();
-	mesh->vertices = assets->allocate_chunk<IndexedMesh::Vertex>(a, mesh->num_verts);
+	mesh->vertices = map->ctx->assets.allocate_chunk<IndexedMesh::Vertex>(a, mesh->num_verts);
 	mesh->num_indices = 36 * blocks.size();
-	mesh->indices = assets->allocate_chunk<unsigned int>(a, mesh->num_indices);
+	mesh->indices = map->ctx->assets.allocate_chunk<unsigned int>(a, mesh->num_indices);
 	IndexedMesh::Vertex* v = mesh->vertices;
 	unsigned int* i = mesh->indices;
 
@@ -113,52 +112,77 @@ static void generate_chunk_mesh(asset_manager_t *assets, asset_t a, std::vector<
 	}
 }
 
-void map_system_t::init()
+static void generate_chunk(map_system_t *map, asset_t asset, IndexedMesh *mesh, int xStart, int yStart, int zStart, const size_t N)
 {
-	chunk_t chunk;
-	entity_t chunk_entity;
-	ctx->emgr.new_entity(&chunk_entity, 1);
-
-	std::random_device rd;
-	std::mt19937 gen(rd());
-	std::uniform_int_distribution<uint32_t> dis;
-	seed = dis(gen);
-	std::printf("[map] seed=%u\n", seed);
-
-	// generate asset storage space for mesh
-	asset_t mesh = "BlockMesh"_hash;
 	std::vector<tmp_block_t> blocks;
-
-	const size_t N = 32;
-	HastyNoise::loadSimd("./");
-	size_t fastestSIMD = HastyNoise::GetFastestSIMD();
-	auto noise = HastyNoise::CreateNoise(seed, fastestSIMD);
-	noise->SetNoiseType(HastyNoise::NoiseType::SimplexFractal);
-	noise->SetFrequency(0.05f);
-	HastyNoise::FloatBuffer buffer = noise->GetNoiseSet(0, 0, 0, N, N, N);
+	HastyNoise::FloatBuffer buffer = map->noise->GetNoiseSet(xStart, yStart, zStart, N, N, N);
 
 	size_t idx = 0;
 	for (size_t x = 0; x < N; x++) {
-		for (size_t y = 0; y < N; y++) {
-			for (size_t z = 0; z < N; z++) {
-				float val = buffer.get()[idx];
+		for (size_t z = 0; z < N; z++) {
+			for (size_t y = 0; y < N; y++) {
+				float val = buffer.get()[x*N*N + z*N + y];
 				if (val > 0.f && val < .2f) {
 					//chunk.blocks[x][y][z].type = chunk_t::block_t::GRASS;
 					blocks.push_back({ glm::vec3(x, y, z), glm::vec3(0.f, 1.f, 0.f) });
-				} else if (val > .2f) {
+				}
+				else if (val > .2f) {
 					//chunk.blocks[x][y][z].type = chunk_t::block_t::ROCK;
 					blocks.push_back({ glm::vec3(x, y, z), glm::vec3(.4f, .4f, .4f) });
-				} else {
+				}
+				else {
 					//chunk.blocks[x][y][z].type = chunk_t::block_t::AIR;
 				}
-				idx++;
+				//idx++;
 			}
 		}
 	}
 
-	generate_chunk_mesh(&ctx->assets, mesh, blocks);
-	ctx->emgr.insert_component<chunk_t>(chunk_entity, std::move(chunk));
-	ctx->emgr.insert_component<IndexedRenderMesh>(chunk_entity, { mesh });
+	generate_chunk_mesh(map, mesh, asset, blocks);
+}
+
+static uint32_t generate_seed()
+{
+	std::random_device rd;
+	std::mt19937 gen(rd());
+	std::uniform_int_distribution<uint32_t> dis;
+	return dis(gen);
+}
+
+void map_system_t::init()
+{
+	seed = generate_seed();
+	HastyNoise::loadSimd("./");
+	noise = HastyNoise::CreateNoise(seed, HastyNoise::GetFastestSIMD());
+	noise->SetNoiseType(HastyNoise::NoiseType::SimplexFractal);
+	noise->SetFrequency(0.05f);
+
+	std::printf("[map] seed=%u\n", seed);
+	std::printf("[map] have %zu chunks in flight\n", n_chunks);
+
+	//chunk_t chunk;
+	entity_t chunk_entities[4];
+	asset_t chunk_assets[4] = { "ChunkMesh1"_hash, "ChunkMesh2"_hash, "CM3"_hash, "CM4"_hash };
+	ctx->emgr.new_entity(chunk_entities, 4);
+
+	IndexedMesh* mesh1 = ctx->assets.make<IndexedMesh>(chunk_assets[0]);
+	IndexedMesh* mesh2 = ctx->assets.make<IndexedMesh>(chunk_assets[1]);
+	IndexedMesh* mesh3 = ctx->assets.make<IndexedMesh>(chunk_assets[2]);
+	IndexedMesh* mesh4 = ctx->assets.make<IndexedMesh>(chunk_assets[3]);
+
+	generate_chunk(this, chunk_assets[0], mesh1, 0, 0, 0, 32);
+	generate_chunk(this, chunk_assets[1], mesh2, 32, 0, 0, 32);
+	generate_chunk(this, chunk_assets[2], mesh3, 0, 32, 0, 32);
+	generate_chunk(this, chunk_assets[3], mesh4, 32, 32, 0, 32);
+	//ctx->emgr.insert_component<chunk_t>(chunk_entity, std::move(chunk));
+	ctx->emgr.insert_component<IndexedRenderMesh>(chunk_entities[0], { chunk_assets[0] });
+	ctx->emgr.insert_component<IndexedRenderMesh>(chunk_entities[1], { chunk_assets[1] });
+	ctx->emgr.insert_component<IndexedRenderMesh>(chunk_entities[2], { chunk_assets[2] });
+	ctx->emgr.insert_component<IndexedRenderMesh>(chunk_entities[3], { chunk_assets[3] });
+	ctx->emgr.insert_component<Position>(chunk_entities[0], { glm::vec3(-16.f, 0.f, -84.f) });
+	ctx->emgr.insert_component<Position>(chunk_entities[1], { glm::vec3(16.f, 0.f, -84.f) });
+	ctx->emgr.insert_component<Position>(chunk_entities[2], { glm::vec3(-16.f, 0.f, -52.f) });
+	ctx->emgr.insert_component<Position>(chunk_entities[3], { glm::vec3(16.f, 0.f, -52.f) });
 }
 
 void map_system_t::update()

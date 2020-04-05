@@ -16,6 +16,10 @@ struct camera_system_t {
 
         int x, y;
         SDL_GetRelativeMouseState(&x, &y);
+        unsigned int captured = SDL_GetRelativeMouseMode();
+        if (!captured) {
+            x = 0; y = 0;
+        }
 
         const float sensitivity = 0.1f;
         cam->yaw += x * sensitivity;
@@ -53,7 +57,6 @@ struct camera_system_t {
         if (state[SDL_SCANCODE_ESCAPE]) {
             uint32_t now = SDL_GetTicks();
             if (now - mouse_last_mode > 200) {
-                unsigned int captured = SDL_GetRelativeMouseMode();
                 SDL_SetRelativeMouseMode((SDL_bool)(!captured));
                 mouse_last_mode = now;
             }

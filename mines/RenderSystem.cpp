@@ -328,6 +328,10 @@ void render_system_t::render(entity_t camera)
         auto& cmd = idx_cmd_arr.second[i];
         entity_t e = idx_cmd_arr.first[i];
         glm::mat4 model = glm::mat4(1.f);
+        if (ctx->emgr.has_component<Position>(e)) {
+            Position& pos = ctx->emgr.get_component<Position>(e);
+            model = glm::translate(model, pos.pos);
+        }
         glUniformMatrix4fv(model_loc, 1, GL_FALSE, glm::value_ptr(model));
         glBindVertexArray(cmd.vao);
         glDrawElements(GL_TRIANGLES, cmd.num_verts, GL_UNSIGNED_INT, (void*)0);

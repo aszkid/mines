@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <hastyNoise.h>
 
 struct context_t;
 struct chunk_t;
@@ -17,4 +18,5 @@ struct map_system_t {
 	size_t n_chunks;
 	size_t view_distance;
 	uint32_t seed;
+	std::unique_ptr<HastyNoise::NoiseSIMD> noise;
 };
