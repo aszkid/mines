@@ -33,6 +33,7 @@ public:
 	template<typename T>
 	T* make(const asset_t asset)
 	{
+		assert(map.find(asset) == map.end());
 		T* t = (T*)std::malloc(sizeof(T));
 		load(asset, (uint8_t*)t, sizeof(T));
 		return t;

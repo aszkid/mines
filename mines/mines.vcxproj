@@ -164,6 +164,7 @@
     <ClCompile Include="..\..\..\..\Desktop\dev\opengl-3.3-core\src\glad.c" />
     <ClCompile Include="AssetManager.cpp" />
     <ClCompile Include="EntityManager.cpp" />
+    <ClCompile Include="hash.cpp" />
     <ClCompile Include="MapSystem.cpp" />
     <ClCompile Include="MeshLoader.cpp" />
     <ClCompile Include="mines.cpp" />

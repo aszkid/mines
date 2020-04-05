@@ -58,6 +58,7 @@ int main(int argc, char **argv)
             glm::vec3(3.5f * (float)(i / w), 0.f, - 3.f * (float)(i % w))
         });
     }
+
     ctx.assets.print();
 
     uint32_t prev = SDL_GetTicks();

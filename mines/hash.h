@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <string>
 
 ////////////////////////////////////////////////////
 // Source: https://gist.github.com/Lee-R/3839813
@@ -19,3 +20,5 @@ constexpr std::uint32_t operator"" _hash(char const* s, size_t count)
 {
     return detail::fnv1a_32(s, count);
 }
+
+std::uint32_t hash_str(std::string s);

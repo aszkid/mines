@@ -210,4 +210,6 @@ private:
 
 	std::unordered_map<uint32_t, packed_array_t<entity_t>> stores;
 	std::unordered_map<uint32_t, state_stream_t> changelogs;
+
+	state_stream_t empty_state_stream;
 };

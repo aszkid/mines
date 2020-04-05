@@ -1,6 +1,7 @@
 #include "EntityManager.h"
 
 entity_manager_t::entity_manager_t()
+	: empty_state_stream(0)
 {
 }
 
@@ -38,8 +39,9 @@ void entity_manager_t::free_entity(entity_t* es, size_t ct)
 state_stream_t* entity_manager_t::get_state_stream(uint32_t cID)
 {
 	auto it = changelogs.find(cID);
-	if (it == changelogs.end())
-		return nullptr;
+	if (it == changelogs.end()) {
+		return &empty_state_stream;
+	}
 	return &it->second;
 }
 
