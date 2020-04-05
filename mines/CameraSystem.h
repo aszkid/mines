@@ -28,7 +28,7 @@ struct camera_system_t {
 
         const uint8_t* state = SDL_GetKeyboardState(NULL);
         const glm::vec3 cam_right = glm::cross(cam->up, look);
-        float vel = 5.f / 1000.f;
+        float vel = 15.f / 1000.f;
         const float delta = (float)ctx->delta;
 
         if (state[SDL_SCANCODE_LCTRL]) {

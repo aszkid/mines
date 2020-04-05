@@ -254,7 +254,6 @@ static void handle_delete_rendermesh(render_system_t* sys, entity_t e)
 
 static void handle_update_indexedrendermesh(render_system_t* sys, entity_t e)
 {
-    std::printf("[render] updating indexed render mesh!\n");
     IndexedRenderMesh* rm = &sys->ctx->emgr.get_component<IndexedRenderMesh>(e);
     IndexedMesh* mesh = sys->ctx->assets.get<IndexedMesh>(rm->indexed_mesh);
     render_system_t::indexed_cmd_t& cmd = sys->indexed_cmds.get<render_system_t::indexed_cmd_t>(e);

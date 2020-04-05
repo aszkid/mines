@@ -38,6 +38,25 @@ static std::pair<float, unsigned int> sz_to_human(float sz)
 	return std::pair<float, unsigned int>(sz, unit);
 }
 
+void asset_manager_t::free_chunk(const asset_t asset, uint8_t* ptr)
+{
+	auto it = chunks.find(asset);
+	if (it == chunks.end())
+		return;
+	int idx = -1;
+	int i = 0;
+	for (auto &sp : it->second) {
+		if (sp.ptr == ptr) {
+			delete[] ptr;
+			idx = i;
+			break;
+		}
+		i++;
+	}
+	if (idx != -1)
+		it->second.erase(it->second.begin() + idx);
+}
+
 void asset_manager_t::print()
 {
 	size_t sum = 0;

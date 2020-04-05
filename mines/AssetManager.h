@@ -48,6 +48,8 @@ public:
 	}
 	uint8_t* get(const asset_t asset);
 
+	void free_chunk(const asset_t asset, uint8_t* ptr);
+
 	template<typename T>
 	inline T* get(const asset_t asset)
 	{
