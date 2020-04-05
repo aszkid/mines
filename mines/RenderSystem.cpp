@@ -192,8 +192,6 @@ static void handle_new_rendermesh(render_system_t* sys, entity_t e)
 
 static void handle_new_indexedrendermesh(render_system_t* sys, entity_t e)
 {
-    std::printf("[render] submitting new indexed render mesh...\n");
-
     IndexedRenderMesh* rm = &sys->ctx->emgr.get_component<IndexedRenderMesh>(e);
     IndexedMesh* mesh = sys->ctx->assets.get<IndexedMesh>(rm->indexed_mesh);
 
@@ -279,7 +277,7 @@ void render_system_t::render(entity_t camera)
     // set uniform values
     glUniformMatrix4fv(projection_loc, 1, GL_FALSE, glm::value_ptr(projection));
     glUniformMatrix4fv(view_loc, 1, GL_FALSE, glm::value_ptr(view));
-    glUniform3f(lightpos_loc, 50.f, 50.f, 50.f);
+    glUniform3f(lightpos_loc, -10.f, 64.f, -32.f);
     glUniform3f(lightcol_loc, 1.f, 1.f, 1.f);
     glUniform3f(viewpos_loc, cam->pos.x, cam->pos.y, cam->pos.z);
 
