@@ -15,7 +15,7 @@ static const int CHUNK_SIZE = 8 * 3;
 
 
 map_system_t::map_system_t(context_t* ctx)
-	: ctx(ctx), view_distance(4), seed(0), chunk_coord(0), n_chunks(0)
+	: ctx(ctx), view_distance(2), seed(0), chunk_coord(0), n_chunks(0)
 {}
 
 map_system_t::~map_system_t()
@@ -168,7 +168,7 @@ static glm::ivec3 get_chunk_pos(glm::vec3 world_pos)
 	return pos;
 }
 
-static void load_chunk(map_system_t* map, glm::ivec3 chunk_coord, map_system_t::chunk_t *chunk)
+static void load_chunk(map_system_t* map, glm::ivec3 &chunk_coord, map_system_t::chunk_t *chunk)
 {
 	IndexedMesh* mesh = map->ctx->assets.get<IndexedMesh>(chunk->mesh_asset);
 	generate_chunk(map, chunk->mesh_asset, mesh, chunk_coord.x, chunk_coord.y, chunk_coord.z);
@@ -178,24 +178,59 @@ static void load_chunk(map_system_t* map, glm::ivec3 chunk_coord, map_system_t::
 	});
 }
 
-static void unload_chunk(map_system_t* map, glm::ivec3 chunk_coord, map_system_t::chunk_t* chunk)
+static void load_chunks(map_system_t* map, std::vector<glm::ivec3>& to_load)
 {
+	const size_t view_on_flight = (2 * map->view_distance + 1) * (2 * map->view_distance + 1);
 
+	std::stringstream ss;
+	std::vector<glm::ivec3> updated_chunks;
+	for (size_t i = 0; i < to_load.size(); i++) {
+		glm::ivec3& chunk = to_load[i];
+		map_system_t::chunk_t ch;
+		std::printf("[map] loading chunk (%d, %d, %d)\n", VEC3_UNPACK(chunk));
+		if (map->chunk_cache.find(chunk) != map->chunk_cache.end())
+			continue;
+		// this is the max cache size we're willing to deal with
+		// TODO should depend on the view distance, but how exactly?????
+		if (map->chunk_cache_sorted.size() > view_on_flight * view_on_flight) {
+			glm::ivec3 target = map->chunk_cache_sorted.back();
+			map->chunk_cache_sorted.pop_back();
+			auto nh = map->chunk_cache.extract(target);
+			assert(!nh.empty());
+			ch = nh.mapped();
+			nh.key() = chunk;
+			map->chunk_cache.insert(std::move(nh));
+		}
+		else {
+			ss.clear(); ss << "ChunkMesh" << map->n_chunks++;
+			ch.mesh_asset = hash_str(ss.str());
+			map->ctx->emgr.new_entity(&ch.entity, 1);
+			IndexedMesh* mesh = map->ctx->assets.make<IndexedMesh>(ch.mesh_asset);
+			mesh->num_indices = 0;
+			mesh->num_verts = 0;
+			map->chunk_cache.insert({ chunk, ch });
+		}
+		load_chunk(map, chunk, &ch);
+		updated_chunks.push_back(chunk);
+	}
+
+	// load into chunk cache sorted
+	map->chunk_cache_sorted.insert(map->chunk_cache_sorted.end(), updated_chunks.begin(), updated_chunks.end());
 }
 
-static std::vector<glm::ivec3> get_surrounding_chunks(glm::ivec3 at)
+static std::vector<glm::ivec3> get_chunks_at(map_system_t* map, glm::ivec3& position, int distance_begin, int distance_end, std::vector<glm::ivec3> &offsets, std::vector<glm::ivec3> &masks)
 {
-	return {
-		at + glm::ivec3(-1, 0, -1),
-		at + glm::ivec3(0, 0, -1),
-		at + glm::ivec3(1, 0, -1),
-		at + glm::ivec3(-1, 0, 0),
-		at,
-		at + glm::ivec3(1, 0, 0),
-		at + glm::ivec3(-1, 0, 1),
-		at + glm::ivec3(0, 0, 1),
-		at + glm::ivec3(1, 0, 1)
-	};
+	std::vector<glm::ivec3> to_load;
+	for (size_t i = 0; i < offsets.size(); i++) {
+		glm::ivec3& offset = offsets[i];
+		glm::ivec3& mask = masks[i];
+		for (int distance = distance_begin; distance <= distance_end; distance++) {
+			for (int j = -distance; j <= distance; j++) {
+				to_load.push_back(distance * offset + j * mask + position);
+			}
+		}
+	}
+	return to_load;
 }
 
 void map_system_t::init(entity_t camera)
@@ -214,22 +249,10 @@ void map_system_t::init(entity_t camera)
 
 	std::printf("[map] spawned at chunk (%d, %d, %d)\n", VEC3_UNPACK(chunk_coord));
 
-	uint32_t asset_base = "ChunkMesh"_hash;
-
-	auto to_load = get_surrounding_chunks(chunk_coord);
-	std::stringstream ss;
-	for (auto& chunk : to_load) {
-		ss.clear(); ss << "ChunkMesh" << n_chunks++;
-		chunk_t ch;
-		ch.mesh_asset = hash_str(ss.str());
-		ctx->emgr.new_entity(&ch.entity, 1);
-		IndexedMesh* mesh = ctx->assets.make<IndexedMesh>(ch.mesh_asset);
-		mesh->num_indices = 0;
-		mesh->num_verts = 0;
-		load_chunk(this, chunk, &ch);
-		chunk_cache.insert({ chunk, ch });
-		chunk_cache_sorted.push_back(chunk);
-	}
+	std::vector<glm::ivec3> offsets = { glm::ivec3(0), glm::ivec3(1, 0, 0), glm::ivec3(0, 0, 1), glm::ivec3(-1, 0, 0), glm::ivec3(0, 0, -1) };
+	std::vector<glm::ivec3> masks = { glm::ivec3(0), glm::ivec3(0, 0, 1), glm::ivec3(1, 0, 0), glm::ivec3(0, 0, 1), glm::ivec3(1, 0, 0) };
+	auto to_load = get_chunks_at(this, chunk_coord, 0, (int)view_distance, offsets, masks);
+	load_chunks(this, to_load);
 }
 
 void map_system_t::update(entity_t camera)
@@ -239,8 +262,29 @@ void map_system_t::update(entity_t camera)
 	if (chunk_coord == new_chunk_coord)
 		return;
 
-	glm::ivec3 diff = new_chunk_coord - chunk_coord;
+	////////////////////////////////////////////////////
+	// first, sort our chunk cache to optimally 
+	//  choose what chunks to evict
+	////////////////////////////////////////////////////
 
+#define VEC3_DOT(w) (w).x*(w).x + (w).y*(w).y + (w).z*(w).z
+
+	auto sort_by_distance = [&new_chunk_coord](glm::ivec3& a, glm::ivec3& b) -> bool {
+		const glm::ivec3 dist_a = new_chunk_coord - a;
+		const glm::ivec3 dist_b = new_chunk_coord - b;
+		const int dot_a = VEC3_DOT(dist_a);
+		const int dot_b = VEC3_DOT(dist_b);
+		return dot_a < dot_b;
+	};
+	std::sort(chunk_cache_sorted.begin(), chunk_cache_sorted.end(), sort_by_distance);
+	assert(chunk_cache_sorted.size() == chunk_cache.size());
+
+
+	////////////////////////////////////////////////////
+	// compute coordinates of the chunks we want to load
+	////////////////////////////////////////////////////
+
+	glm::ivec3 diff = new_chunk_coord - chunk_coord;
 	std::vector<glm::ivec3> offsets;
 	std::vector <glm::ivec3> masks;
 	offsets.reserve(2 * view_distance + 1);
@@ -263,63 +307,9 @@ void map_system_t::update(entity_t camera)
 		masks.insert(masks.end(), { glm::ivec3(1, 0, 0) });
 	}
 
-#define VEC3_DOT(w) (w).x*(w).x + (w).y*(w).y + (w).z*(w).z
+	auto to_load = get_chunks_at(this, new_chunk_coord, (int)view_distance, (int)view_distance, offsets, masks);
 
-	auto sort_by_distance = [&new_chunk_coord](glm::ivec3& a, glm::ivec3& b) -> bool {
-		const glm::ivec3 dist_a = new_chunk_coord - a;
-		const glm::ivec3 dist_b = new_chunk_coord - b;
-		const int dot_a = VEC3_DOT(dist_a);
-		const int dot_b = VEC3_DOT(dist_b);
-		return dot_a < dot_b;
-	};
-
-	std::sort(chunk_cache_sorted.begin(), chunk_cache_sorted.end(), sort_by_distance);
-	assert(chunk_cache_sorted.size() == chunk_cache.size());
-	
-	std::vector<glm::ivec3> to_load;
-	for (size_t i = 0; i < offsets.size(); i++) {
-		glm::ivec3& offset = offsets[i];
-		glm::ivec3& mask = masks[i];
-		for (int j = -(int)view_distance; j <= (int)view_distance; j++) {
-			to_load.push_back((int)view_distance * offset + j * mask + new_chunk_coord);
-		}
-	}
-
-	const size_t view_on_flight = (2 * view_distance + 1) * (2 * view_distance + 1);
-
-	std::stringstream ss;
-	std::vector<glm::ivec3> updated_chunks;
-	for (size_t i = 0; i < to_load.size(); i++) {
-		glm::ivec3 &chunk = to_load[i];
-		chunk_t ch;
-		std::printf("[map] loading chunk (%d, %d, %d)\n", VEC3_UNPACK(chunk));
-		if (chunk_cache.find(chunk) != chunk_cache.end())
-			continue;
-		// this is the max cache size
-		// TODO should depend on the view distance, but how exactly?
-		if (chunk_cache_sorted.size() > view_on_flight * view_on_flight) {
-			glm::ivec3 target = chunk_cache_sorted.back();
-			chunk_cache_sorted.pop_back();
-			auto nh = chunk_cache.extract(target);
-			assert(!nh.empty());
-			ch = nh.mapped();
-			nh.key() = chunk;
-			chunk_cache.insert(std::move(nh));
-		} else {
-			ss.clear(); ss << "ChunkMesh" << n_chunks++;
-			ch.mesh_asset = hash_str(ss.str());
-			ctx->emgr.new_entity(&ch.entity, 1);
-			IndexedMesh* mesh = ctx->assets.make<IndexedMesh>(ch.mesh_asset);
-			mesh->num_indices = 0;
-			mesh->num_verts = 0;
-			chunk_cache.insert({ chunk, ch });
-		}
-		load_chunk(this, chunk, &ch);
-		updated_chunks.push_back(chunk);
-	}
-
-	// load into chunk cache sorted
-	chunk_cache_sorted.insert(chunk_cache_sorted.end(), updated_chunks.begin(), updated_chunks.end());
-
+	// and finally load them
+	load_chunks(this, to_load);
 	chunk_coord = new_chunk_coord;
 }
