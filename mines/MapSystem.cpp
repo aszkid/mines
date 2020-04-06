@@ -15,7 +15,7 @@ static const int CHUNK_SIZE = 8 * 3;
 
 
 map_system_t::map_system_t(context_t* ctx)
-	: ctx(ctx), view_distance(1), seed(0), chunk_coord(0), n_chunks(0)
+	: ctx(ctx), view_distance(4), seed(0), chunk_coord(0), n_chunks(0)
 {}
 
 map_system_t::~map_system_t()
@@ -240,24 +240,27 @@ void map_system_t::update(entity_t camera)
 		return;
 
 	glm::ivec3 diff = new_chunk_coord - chunk_coord;
-	std::vector<glm::ivec3> insert_offsets;
 
-	if (diff == glm::ivec3(1, 0, 0)) { // moving +x
-		insert_offsets = { glm::ivec3(1, 0, -1), glm::ivec3(1, 0, 0), glm::ivec3(1, 0, 1) };
-	} else if (diff == glm::ivec3(-1, 0, 0)) { // moving -x
-		insert_offsets = { glm::ivec3(-1, 0, -1), glm::ivec3(-1, 0, 0), glm::ivec3(-1, 0, 1) };
-	} else if (diff == glm::ivec3(0, 0, -1)) { // moving -z
-		insert_offsets = { glm::ivec3(1, 0, -1), glm::ivec3(0, 0, -1), glm::ivec3(-1, 0, -1) };
-	} else if (diff == glm::ivec3(0, 0, 1)) { // moving +z
-		insert_offsets = { glm::ivec3(1, 0, 1), glm::ivec3(0, 0, 1), glm::ivec3(-1, 0, 1) };
-	} else if (diff == glm::ivec3(1, 0, -1)) { // moving +x, -z
-		insert_offsets = { glm::ivec3(-1, 0, -1), glm::ivec3(0, 0, -1), glm::ivec3(1, 0, -1), glm::ivec3(1, 0, 0), glm::ivec3(1, 0, 1) };
-	} else if (diff == glm::ivec3(-1, 0, 1)) { // moving -x, +z
-		insert_offsets = { glm::ivec3(-1, 0, -1), glm::ivec3(-1, 0, 0), glm::ivec3(-1, 0, 1), glm::ivec3(0, 0, 1), glm::ivec3(1, 0, 1) };
-	} else if (diff == glm::ivec3(1, 0, 1)) { // moving +x, +z
-		insert_offsets = { glm::ivec3(-1, 0, 1), glm::ivec3(0, 0, 1), glm::ivec3(1, 0, 1), glm::ivec3(1, 0, 0), glm::ivec3(1, 0, -1) };
-	} else if (diff == glm::ivec3(-1, 0, -1)) { // moving -x, -z
-		insert_offsets = { glm::ivec3(-1, 0, 1), glm::ivec3(-1, 0, 0), glm::ivec3(-1, 0, -1), glm::ivec3(0, 0, -1), glm::ivec3(1, 0, -1) };
+	std::vector<glm::ivec3> offsets;
+	std::vector <glm::ivec3> masks;
+	offsets.reserve(2 * view_distance + 1);
+	masks.reserve(2 * view_distance + 1);
+
+	if (diff.x == 1) { // moving +x
+		offsets.insert(offsets.end(), { glm::ivec3(1, 0, 0) });
+		masks.insert(masks.end(), { glm::ivec3(0, 0, 1) });
+	}
+	if (diff.x == -1) { // moving -x
+		offsets.insert(offsets.end(), { glm::ivec3(-1, 0, 0) });
+		masks.insert(masks.end(), { glm::ivec3(0, 0, 1) });
+	}
+	if (diff.z == -1) { // moving -z
+		offsets.insert(offsets.end(), { glm::ivec3(0, 0, -1) });
+		masks.insert(masks.end(), { glm::ivec3(1, 0, 0) });
+	}
+	if (diff.z == 1) { // moving +z
+		offsets.insert(offsets.end(), { glm::ivec3(0, 0, 1) });
+		masks.insert(masks.end(), { glm::ivec3(1, 0, 0) });
 	}
 
 #define VEC3_DOT(w) (w).x*(w).x + (w).y*(w).y + (w).z*(w).z
@@ -272,17 +275,29 @@ void map_system_t::update(entity_t camera)
 
 	std::sort(chunk_cache_sorted.begin(), chunk_cache_sorted.end(), sort_by_distance);
 	assert(chunk_cache_sorted.size() == chunk_cache.size());
+	
+	std::vector<glm::ivec3> to_load;
+	for (size_t i = 0; i < offsets.size(); i++) {
+		glm::ivec3& offset = offsets[i];
+		glm::ivec3& mask = masks[i];
+		for (int j = -(int)view_distance; j <= (int)view_distance; j++) {
+			to_load.push_back((int)view_distance * offset + j * mask + new_chunk_coord);
+		}
+	}
+
+	const size_t view_on_flight = (2 * view_distance + 1) * (2 * view_distance + 1);
 
 	std::stringstream ss;
 	std::vector<glm::ivec3> updated_chunks;
-	for (size_t i = 0; i < insert_offsets.size(); i++) {
-		glm::ivec3 chunk = new_chunk_coord + insert_offsets[i];
+	for (size_t i = 0; i < to_load.size(); i++) {
+		glm::ivec3 &chunk = to_load[i];
 		chunk_t ch;
+		std::printf("[map] loading chunk (%d, %d, %d)\n", VEC3_UNPACK(chunk));
 		if (chunk_cache.find(chunk) != chunk_cache.end())
 			continue;
 		// this is the max cache size
-		// TODO should depend on the view distance!
-		if (chunk_cache_sorted.size() > 9*9) {
+		// TODO should depend on the view distance, but how exactly?
+		if (chunk_cache_sorted.size() > view_on_flight * view_on_flight) {
 			glm::ivec3 target = chunk_cache_sorted.back();
 			chunk_cache_sorted.pop_back();
 			auto nh = chunk_cache.extract(target);
