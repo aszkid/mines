@@ -228,6 +228,7 @@ void map_system_t::init(entity_t camera)
 		mesh->num_verts = 0;
 		load_chunk(this, chunk, &ch);
 		chunk_cache.insert({ chunk, ch });
+		chunk_cache_sorted.push_back(chunk);
 	}
 }
 
@@ -259,27 +260,31 @@ void map_system_t::update(entity_t camera)
 		insert_offsets = { glm::ivec3(-1, 0, 1), glm::ivec3(-1, 0, 0), glm::ivec3(-1, 0, -1), glm::ivec3(0, 0, -1), glm::ivec3(1, 0, -1) };
 	}
 
-	std::vector<glm::ivec3> evictions;
-	if (chunk_cache.size() > 9*9) {
-		for (auto it : chunk_cache) {
-			glm::ivec3 dist = new_chunk_coord - it.first;
-			int dot = dist.x * dist.x + dist.y * dist.y + dist.z * dist.z;
-			if (dot >= 5*5) {
-				evictions.push_back(it.first);
-			}
-		}
-	}
+#define VEC3_DOT(w) (w).x*(w).x + (w).y*(w).y + (w).z*(w).z
+
+	auto sort_by_distance = [&new_chunk_coord](glm::ivec3& a, glm::ivec3& b) -> bool {
+		const glm::ivec3 dist_a = new_chunk_coord - a;
+		const glm::ivec3 dist_b = new_chunk_coord - b;
+		const int dot_a = VEC3_DOT(dist_a);
+		const int dot_b = VEC3_DOT(dist_b);
+		return dot_a < dot_b;
+	};
+
+	std::sort(chunk_cache_sorted.begin(), chunk_cache_sorted.end(), sort_by_distance);
+	assert(chunk_cache_sorted.size() == chunk_cache.size());
 
 	std::stringstream ss;
+	std::vector<glm::ivec3> updated_chunks;
 	for (size_t i = 0; i < insert_offsets.size(); i++) {
 		glm::ivec3 chunk = new_chunk_coord + insert_offsets[i];
+		chunk_t ch;
 		if (chunk_cache.find(chunk) != chunk_cache.end())
 			continue;
-		chunk_t ch;
-		if (!evictions.empty()) {
-			std::printf("[map] recycling a far away chunk...\n");
-			glm::ivec3 target = evictions.back();
-			evictions.pop_back();
+		// this is the max cache size
+		// TODO should depend on the view distance!
+		if (chunk_cache_sorted.size() > 9*9) {
+			glm::ivec3 target = chunk_cache_sorted.back();
+			chunk_cache_sorted.pop_back();
 			auto nh = chunk_cache.extract(target);
 			assert(!nh.empty());
 			ch = nh.mapped();
@@ -295,7 +300,11 @@ void map_system_t::update(entity_t camera)
 			chunk_cache.insert({ chunk, ch });
 		}
 		load_chunk(this, chunk, &ch);
+		updated_chunks.push_back(chunk);
 	}
+
+	// load into chunk cache sorted
+	chunk_cache_sorted.insert(chunk_cache_sorted.end(), updated_chunks.begin(), updated_chunks.end());
 
 	chunk_coord = new_chunk_coord;
 }

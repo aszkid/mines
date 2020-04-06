@@ -43,4 +43,5 @@ struct map_system_t {
 
 	glm::ivec3 chunk_coord;
 	std::unordered_map<glm::ivec3, chunk_t, ivec3_hash_f> chunk_cache;
+	std::vector<glm::ivec3> chunk_cache_sorted;
 };
