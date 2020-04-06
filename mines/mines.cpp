@@ -44,23 +44,6 @@ int main(int argc, char **argv)
     ctx.emgr.materialize();
     map_sys.init(camera);
 
-    const asset_t monkey("/mesh/monkey"_hash);
-    if (load_mesh(&ctx.assets, monkey, "./monkey.obj") != 0)
-        return EXIT_FAILURE;
-
-    const size_t w = 20;
-    const size_t n_foos = w * w;
-    entity_t foos[n_foos];
-    ctx.emgr.new_entity(foos, n_foos);
-    for (size_t i = 0; i < n_foos; i++) {
-        ctx.emgr.insert_component<RenderMesh>(foos[i], { monkey });
-        ctx.emgr.insert_component<Position>(foos[i], {
-            glm::vec3(3.5f * (float)(i / w), 0.f, - 3.f * (float)(i % w))
-        });
-    }
-
-    ctx.assets.print();
-
     uint32_t prev = SDL_GetTicks();
     uint32_t delta;
     while (!quit) {
@@ -81,6 +64,8 @@ int main(int argc, char **argv)
     }
 
     render_sys.teardown();
+
+    ctx.assets.print();
 
     return EXIT_SUCCESS;
 }

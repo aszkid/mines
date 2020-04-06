@@ -15,11 +15,8 @@ static const int CHUNK_SIZE = 8 * 3;
 
 
 map_system_t::map_system_t(context_t* ctx)
-	: ctx(ctx), view_distance(1), seed(0), chunk_coord(0)
-{
-	n_chunks = 2 * view_distance + 1;
-	n_chunks = n_chunks * n_chunks * n_chunks;
-}
+	: ctx(ctx), view_distance(1), seed(0), chunk_coord(0), n_chunks(0)
+{}
 
 map_system_t::~map_system_t()
 {}
@@ -210,7 +207,7 @@ void map_system_t::init(entity_t camera)
 	noise->SetFrequency(0.05f);
 
 	std::printf("[map] seed=%u\n", seed);
-	std::printf("[map] num_chunks=%zum, view_distance=%zu\n", n_chunks, view_distance);
+	std::printf("[map] view_distance=%zu\n", view_distance);
 
 	Camera& cam = ctx->emgr.get_component<Camera>(camera);
 	chunk_coord = get_chunk_pos(cam.pos);
@@ -221,9 +218,8 @@ void map_system_t::init(entity_t camera)
 
 	auto to_load = get_surrounding_chunks(chunk_coord);
 	std::stringstream ss;
-	size_t i = 0;
 	for (auto& chunk : to_load) {
-		ss.clear(); ss << "ChunkMesh" << i;
+		ss.clear(); ss << "ChunkMesh" << n_chunks++;
 		chunk_t ch;
 		ch.mesh_asset = hash_str(ss.str());
 		ctx->emgr.new_entity(&ch.entity, 1);
@@ -232,7 +228,6 @@ void map_system_t::init(entity_t camera)
 		mesh->num_verts = 0;
 		load_chunk(this, chunk, &ch);
 		chunk_cache.insert({ chunk, ch });
-		i++;
 	}
 }
 
@@ -244,44 +239,62 @@ void map_system_t::update(entity_t camera)
 		return;
 
 	glm::ivec3 diff = new_chunk_coord - chunk_coord;
-	std::vector<glm::ivec3> delete_offsets;
 	std::vector<glm::ivec3> insert_offsets;
 
 	if (diff == glm::ivec3(1, 0, 0)) { // moving +x
-		delete_offsets = { glm::ivec3(-1, 0, -1), glm::ivec3(-1, 0, 0), glm::ivec3(-1, 0, 1) };
 		insert_offsets = { glm::ivec3(1, 0, -1), glm::ivec3(1, 0, 0), glm::ivec3(1, 0, 1) };
 	} else if (diff == glm::ivec3(-1, 0, 0)) { // moving -x
-		delete_offsets = { glm::ivec3(1, 0, -1), glm::ivec3(1, 0, 0), glm::ivec3(1, 0, 1) };
 		insert_offsets = { glm::ivec3(-1, 0, -1), glm::ivec3(-1, 0, 0), glm::ivec3(-1, 0, 1) };
 	} else if (diff == glm::ivec3(0, 0, -1)) { // moving -z
-		delete_offsets = { glm::ivec3(1, 0, 1), glm::ivec3(0, 0, 1), glm::ivec3(-1, 0, 1) };
 		insert_offsets = { glm::ivec3(1, 0, -1), glm::ivec3(0, 0, -1), glm::ivec3(-1, 0, -1) };
 	} else if (diff == glm::ivec3(0, 0, 1)) { // moving +z
-		delete_offsets = { glm::ivec3(1, 0, -1), glm::ivec3(0, 0, -1), glm::ivec3(-1, 0, -1) };
 		insert_offsets = { glm::ivec3(1, 0, 1), glm::ivec3(0, 0, 1), glm::ivec3(-1, 0, 1) };
 	} else if (diff == glm::ivec3(1, 0, -1)) { // moving +x, -z
-		delete_offsets = { glm::ivec3(-1, 0, -1), glm::ivec3(-1, 0, 0), glm::ivec3(-1, 0, 1), glm::ivec3(0, 0, 1), glm::ivec3(1, 0, 1) };
 		insert_offsets = { glm::ivec3(-1, 0, -1), glm::ivec3(0, 0, -1), glm::ivec3(1, 0, -1), glm::ivec3(1, 0, 0), glm::ivec3(1, 0, 1) };
 	} else if (diff == glm::ivec3(-1, 0, 1)) { // moving -x, +z
-		delete_offsets = { glm::ivec3(-1, 0, -1), glm::ivec3(0, 0, -1), glm::ivec3(1, 0, -1), glm::ivec3(1, 0, 0), glm::ivec3(1, 0, 1) };
 		insert_offsets = { glm::ivec3(-1, 0, -1), glm::ivec3(-1, 0, 0), glm::ivec3(-1, 0, 1), glm::ivec3(0, 0, 1), glm::ivec3(1, 0, 1) };
 	} else if (diff == glm::ivec3(1, 0, 1)) { // moving +x, +z
-		delete_offsets = { glm::ivec3(-1, 0, 1), glm::ivec3(-1, 0, 0), glm::ivec3(-1, 0, -1), glm::ivec3(0, 0, -1), glm::ivec3(1, 0, -1) };
 		insert_offsets = { glm::ivec3(-1, 0, 1), glm::ivec3(0, 0, 1), glm::ivec3(1, 0, 1), glm::ivec3(1, 0, 0), glm::ivec3(1, 0, -1) };
 	} else if (diff == glm::ivec3(-1, 0, -1)) { // moving -x, -z
-		delete_offsets = { glm::ivec3(-1, 0, 1), glm::ivec3(0, 0, 1), glm::ivec3(1, 0, 1), glm::ivec3(1, 0, 0), glm::ivec3(1, 0, -1) };
 		insert_offsets = { glm::ivec3(-1, 0, 1), glm::ivec3(-1, 0, 0), glm::ivec3(-1, 0, -1), glm::ivec3(0, 0, -1), glm::ivec3(1, 0, -1) };
 	}
 
-	assert(delete_offsets.size() == insert_offsets.size());
-	for (size_t i = 0; i < delete_offsets.size(); i++) {
-		glm::ivec3 target = chunk_coord + delete_offsets[i];
+	std::vector<glm::ivec3> evictions;
+	if (chunk_cache.size() > 9*9) {
+		for (auto it : chunk_cache) {
+			glm::ivec3 dist = new_chunk_coord - it.first;
+			int dot = dist.x * dist.x + dist.y * dist.y + dist.z * dist.z;
+			if (dot >= 5*5) {
+				evictions.push_back(it.first);
+			}
+		}
+	}
+
+	std::stringstream ss;
+	for (size_t i = 0; i < insert_offsets.size(); i++) {
 		glm::ivec3 chunk = new_chunk_coord + insert_offsets[i];
-		auto nh = chunk_cache.extract(target);
-		assert(!nh.empty());
-		load_chunk(this, chunk, &nh.mapped());
-		nh.key() = chunk;
-		chunk_cache.insert(std::move(nh));
+		if (chunk_cache.find(chunk) != chunk_cache.end())
+			continue;
+		chunk_t ch;
+		if (!evictions.empty()) {
+			std::printf("[map] recycling a far away chunk...\n");
+			glm::ivec3 target = evictions.back();
+			evictions.pop_back();
+			auto nh = chunk_cache.extract(target);
+			assert(!nh.empty());
+			ch = nh.mapped();
+			nh.key() = chunk;
+			chunk_cache.insert(std::move(nh));
+		} else {
+			ss.clear(); ss << "ChunkMesh" << n_chunks++;
+			ch.mesh_asset = hash_str(ss.str());
+			ctx->emgr.new_entity(&ch.entity, 1);
+			IndexedMesh* mesh = ctx->assets.make<IndexedMesh>(ch.mesh_asset);
+			mesh->num_indices = 0;
+			mesh->num_verts = 0;
+			chunk_cache.insert({ chunk, ch });
+		}
+		load_chunk(this, chunk, &ch);
 	}
 
 	chunk_coord = new_chunk_coord;
