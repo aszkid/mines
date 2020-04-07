@@ -15,7 +15,6 @@ static const int CHUNK_SIZE = 32;
 
 #define VEC3_UNPACK(v) v.x, v.y, v.z
 
-
 map_system_t::map_system_t(context_t* ctx)
 	: ctx(ctx), view_distance(1), seed(0), chunk_coord(0), n_chunks(0)
 {}
@@ -100,7 +99,7 @@ static void generate_chunk_mesh(map_system_t* map, IndexedMesh *mesh, asset_t a,
 		mesh->indices = map->ctx->assets.allocate_chunk<unsigned int>(a, mesh->num_indices);
 	}
 
-	for (size_t k = 0; k < blocks.size(); k++) {
+	for (int k = 0; k < blocks.size(); k++) {
 		tmp_block_t& blk = blocks[k];
 		glm::vec3& pos = blk.pos;
 		glm::vec3& color = blk.color;
@@ -168,22 +167,13 @@ static glm::ivec3 get_chunk_pos(glm::vec3 world_pos)
 	return pos;
 }
 
-static void load_chunk(map_system_t* map, glm::ivec3 &chunk_coord, map_system_t::chunk_t *chunk)
-{
-	IndexedMesh* mesh = map->ctx->assets.get<IndexedMesh>(chunk->mesh_asset);
-	generate_chunk(map, chunk->mesh_asset, mesh, chunk_coord.x, chunk_coord.y, chunk_coord.z);
-	map->ctx->emgr.insert_component<IndexedRenderMesh>(chunk->entity, { chunk->mesh_asset });
-	map->ctx->emgr.insert_component<Position>(chunk->entity, {
-		(float)CHUNK_SIZE * glm::vec3(chunk_coord)
-	});
-}
-
 static void load_chunks(map_system_t* map, std::vector<glm::ivec3>& to_load)
 {
 	const size_t view_on_flight = (2 * map->view_distance + 1) * (2 * map->view_distance + 1);
 
-	std::stringstream ss;
-	for (size_t i = 0; i < to_load.size(); i++) {
+	// load chunk coordinates, ignore hot chunks
+	std::vector<std::pair<glm::ivec3, map_system_t::chunk_t>> for_real;
+	for (int i = 0; i < to_load.size(); i++) {
 		glm::ivec3& chunk = to_load[i];
 		map_system_t::chunk_t ch;
 		if (map->chunk_cache.find(chunk) != map->chunk_cache.end())
@@ -194,15 +184,12 @@ static void load_chunks(map_system_t* map, std::vector<glm::ivec3>& to_load)
 			glm::ivec3 target = map->chunk_cache_sorted.back();
 			map->chunk_cache_sorted.pop_back();
 			auto nh = map->chunk_cache.extract(target);
-			assert(!nh.empty());
 			ch = nh.mapped();
 			nh.key() = chunk;
 			map->chunk_cache.insert(std::move(nh));
 		}
 		else {
 			static uint32_t base = "ChunkMesh"_hash;
-			//ss.clear(); ss << "ChunkMesh" << map->n_chunks++;
-			//ch.mesh_asset = hash_str(ss.str());
 			ch.mesh_asset = base++;
 			map->ctx->emgr.new_entity(&ch.entity, 1);
 			IndexedMesh* mesh = map->ctx->assets.make<IndexedMesh>(ch.mesh_asset);
@@ -210,8 +197,37 @@ static void load_chunks(map_system_t* map, std::vector<glm::ivec3>& to_load)
 			mesh->num_verts = 0;
 			map->chunk_cache.insert({ chunk, ch });
 		}
-		load_chunk(map, chunk, &ch);
+		for_real.push_back({ chunk, ch });
 		map->chunk_cache_sorted.push_back(chunk);
+	}
+
+	if (for_real.size() == 0)
+		return;
+
+	// generate chunks (heavy lifting -- go wide)
+	// TODO: this is temporary, we will eventually want to be more systematic about splitting
+	//  the chunk-generating workload.
+	//  it's probably a good idea to avoid such spiked work (we're idling most of the time except
+	//   when we're loading chunks) and have background threads loading nearby chunks into the cache.
+	//   then, walking around would be seamless. only flying really fast is an issue.
+	//  at any rate, simply decoupling this work from the main render thread would be progress; allowing
+	//   other systems to do their work, and joining right before we materialize the frame changes.
+#pragma omp parallel for num_threads(4)
+	for (int i = 0; i < for_real.size(); i++) {
+		const map_system_t::chunk_t& chunk = for_real[i].second;
+		const glm::ivec3& chunk_coord = for_real[i].first;
+		IndexedMesh* mesh = map->ctx->assets.get<IndexedMesh>(chunk.mesh_asset);
+		generate_chunk(map, chunk.mesh_asset, mesh, chunk_coord.x, chunk_coord.y, chunk_coord.z);
+	}
+
+	// insert chunk components
+	for (int i = 0; i < for_real.size(); i++) {
+		const map_system_t::chunk_t& chunk = for_real[i].second;
+		const glm::ivec3 &chunk_coord = for_real[i].first;
+		map->ctx->emgr.insert_component<IndexedRenderMesh>(chunk.entity, { chunk.mesh_asset });
+		map->ctx->emgr.insert_component<Position>(chunk.entity, {
+			(float)CHUNK_SIZE * glm::vec3(chunk_coord)
+		});
 	}
 }
 
