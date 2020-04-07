@@ -30,7 +30,7 @@ int main(int argc, char **argv)
     entity_t camera;
     ctx.emgr.new_entity(&camera, 1);
     ctx.emgr.insert_component<Camera>(camera, {
-        glm::vec3(3.f, 5.f, 3.f),   // position
+        glm::vec3(1.f, 3.f, 1.f),   // position
         glm::vec3(0.f, 1.f, 0.f),   // up
         0.f, -90.f, 0.f,            // pitch, yaw, roll
         45.f                        // fov
