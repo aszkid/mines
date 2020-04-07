@@ -8,14 +8,15 @@
 #include "IndexedRenderMesh.h"
 #include <glm/glm.hpp>
 #include <algorithm>
+#include <array>
 
-static const int CHUNK_SIZE = 8 * 3;
+static const int CHUNK_SIZE = 32;
 
 #define VEC3_UNPACK(v) v.x, v.y, v.z
 
 
 map_system_t::map_system_t(context_t* ctx)
-	: ctx(ctx), view_distance(2), seed(0), chunk_coord(0), n_chunks(0)
+	: ctx(ctx), view_distance(1), seed(0), chunk_coord(0), n_chunks(0)
 {}
 
 map_system_t::~map_system_t()
@@ -25,6 +26,64 @@ struct tmp_block_t {
 	glm::vec3 pos;
 	glm::vec3 color;
 };
+
+////////////////////////////////////////////
+// CUBE VERTEX DATA
+////////////////////////////////////////////
+static const glm::vec3 normals[6] = {
+	glm::normalize(glm::vec3(1.f, 0.f, 0.f)),
+	glm::normalize(glm::vec3(0.f, 1.f, 0.f)),
+	glm::normalize(glm::vec3(0.f, 0.f, 1.f)),
+	glm::normalize(glm::vec3(-1.f, 0.f, 0.f)),
+	glm::normalize(glm::vec3(0.f, -1.f, 0.f)),
+	glm::normalize(glm::vec3(0.f, 0.f, -1.f)),
+};
+static const glm::vec3 vertices[8] = {
+	glm::vec3(0.f),
+	glm::vec3(0.f, 0.f, 1.f),
+	glm::vec3(1.f, 0.f, 1.f),
+	glm::vec3(1.f, 0.f, 0.f),
+	glm::vec3(0.f, 1.f, 0.f),
+	glm::vec3(0.f, 1.f, 1.f),
+	glm::vec3(1.f),
+	glm::vec3(1.f, 1.f, 0.f)
+};
+static const glm::vec3 vertex_data[24] = {
+	vertices[0], vertices[1], vertices[2], vertices[3],
+	vertices[4], vertices[5], vertices[6], vertices[7],
+	vertices[0], vertices[1], vertices[5], vertices[4],
+	vertices[3], vertices[2], vertices[6], vertices[7],
+	vertices[1], vertices[2], vertices[6], vertices[5],
+	vertices[0], vertices[3], vertices[7], vertices[4]
+};
+static const glm::vec3 normal_data[24] = {
+	normals[4], normals[4], normals[4], normals[4],
+	normals[1], normals[1], normals[1], normals[1],
+	normals[3], normals[3], normals[3], normals[3],
+	normals[0], normals[0], normals[0], normals[0],
+	normals[2], normals[2], normals[2], normals[2],
+	normals[5], normals[5], normals[5], normals[5]
+};
+static const unsigned int indices[36] = {
+	0, 1, 2,     2, 3, 0,		// bottom
+	4, 5, 6,     6, 7, 4,		// top
+	8, 9, 10,    10, 11, 8,		// left
+	12, 13, 14,  14, 15, 12,	// right
+	16, 17, 18,  18, 19, 16,	// front
+	20, 21, 22,  22, 23, 20		// back
+};
+static std::array<glm::vec3, 72> gen_packed_cube()
+{
+	std::array<glm::vec3, 72> arr{ glm::vec3(0) };
+	for (size_t i = 0; i < 24; i++) {
+		arr[3 * i] = vertex_data[i];
+		arr[3 * i + 1] = normal_data[i];
+		arr[3 * i + 2] = glm::vec3(0);
+	}
+	return arr;
+}
+static std::array <glm::vec3, 72> packed_vertex_data;
+////////////////////////////////////////////
 
 static void generate_chunk_mesh(map_system_t* map, IndexedMesh *mesh, asset_t a, std::vector<tmp_block_t> &blocks)
 {
@@ -42,81 +101,27 @@ static void generate_chunk_mesh(map_system_t* map, IndexedMesh *mesh, asset_t a,
 
 	IndexedMesh::Vertex* v = mesh->vertices;
 	unsigned int* i = mesh->indices;
-
-	static const glm::vec3 normals[6] = {
-		glm::normalize(glm::vec3(1.f, 0.f, 0.f)),
-		glm::normalize(glm::vec3(0.f, 1.f, 0.f)),
-		glm::normalize(glm::vec3(0.f, 0.f, 1.f)),
-		glm::normalize(glm::vec3(-1.f, 0.f, 0.f)),
-		glm::normalize(glm::vec3(0.f, -1.f, 0.f)),
-		glm::normalize(glm::vec3(0.f, 0.f, -1.f)),
-	};
-
-#define RGB v->r = color.r; v->g = color.g; v->b = color.b
-#define COPY_NORMAL(k) std::memcpy(&v->nx, &normals[k], 3 * sizeof(float))
-#define NORMAL_X COPY_NORMAL(0)
-#define NORMAL_Y COPY_NORMAL(1)
-#define NORMAL_Z COPY_NORMAL(2)
-#define NORMAL_NEGX COPY_NORMAL(3)
-#define NORMAL_NEGY COPY_NORMAL(4)
-#define NORMAL_NEGZ COPY_NORMAL(5)
-#define VERTEX_0 v->x = pos.x; v->y = pos.y; v->z = pos.z
-#define VERTEX_1 v->x = pos.x; v->y = pos.y; v->z = pos.z + 1.f
-#define VERTEX_2 v->x = pos.x + 1.f; v->y = pos.y; v->z = pos.z + 1.f
-#define VERTEX_3 v->x = pos.x + 1.f; v->y = pos.y; v->z = pos.z
-#define VERTEX_4 v->x = pos.x; v->y = pos.y + 1.f; v->z = pos.z
-#define VERTEX_5 v->x = pos.x; v->y = pos.y + 1.f; v->z = pos.z + 1.f
-#define VERTEX_6 v->x = pos.x + 1.f; v->y = pos.y + 1.f; v->z = pos.z + 1.f
-#define VERTEX_7 v->x = pos.x + 1.f; v->y = pos.y + 1.f; v->z = pos.z
-
-	static const unsigned int indices[36] = {
-		0, 1, 2,     2, 3, 0,		// bottom
-		4, 5, 6,     6, 7, 4,		// top
-		8, 9, 10,    10, 11, 8,		// left
-		12, 13, 14,  14, 15, 12,	// right
-		16, 17, 18,  18, 19, 16,	// front
-		20, 21, 22,  22, 23, 20		// back
-	};
 	
 	size_t block_n = 0;
 	for (auto& blk : blocks) {
 		glm::vec3& pos = blk.pos;
 		glm::vec3& color = blk.color;
-		// bottom face (CCW)
-		VERTEX_0; NORMAL_NEGY; RGB; v += 1;		// 0
-		VERTEX_1; NORMAL_NEGY; RGB; v += 1;		// 1
-		VERTEX_2; NORMAL_NEGY; RGB; v += 1;		// 2
-		VERTEX_3; NORMAL_NEGY; RGB; v += 1;		// 3
-		// top face (CCW)
-		VERTEX_4; NORMAL_Y; RGB; v += 1;		// 4
-		VERTEX_5; NORMAL_Y; RGB; v += 1;		// 5
-		VERTEX_6; NORMAL_Y; RGB; v += 1;		// 6
-		VERTEX_7; NORMAL_Y; RGB; v += 1;		// 7
-		// left face (CCW)
-		VERTEX_0; NORMAL_NEGX; RGB; v += 1;		// 8
-		VERTEX_1; NORMAL_NEGX; RGB; v += 1;		// 9
-		VERTEX_5; NORMAL_NEGX; RGB; v += 1;		// 10
-		VERTEX_4; NORMAL_NEGX; RGB; v += 1;		// 11
-		// right face (CCW)
-		VERTEX_3; NORMAL_X; RGB; v += 1;		// 12
-		VERTEX_2; NORMAL_X; RGB; v += 1;		// 13
-		VERTEX_6; NORMAL_X; RGB; v += 1;		// 14
-		VERTEX_7; NORMAL_X; RGB; v += 1;		// 15
-		// front face (CCW)
-		VERTEX_1; NORMAL_Z; RGB; v += 1;		// 16
-		VERTEX_2; NORMAL_Z; RGB; v += 1;		// 17
-		VERTEX_6; NORMAL_Z; RGB; v += 1;		// 18
-		VERTEX_5; NORMAL_Z; RGB; v += 1;		// 19
-		// back face (CCW)
-		VERTEX_0; NORMAL_NEGZ; RGB; v += 1;		// 20
-		VERTEX_3; NORMAL_NEGZ; RGB; v += 1;		// 21
-		VERTEX_7; NORMAL_NEGZ; RGB; v += 1;		// 22
-		VERTEX_4; NORMAL_NEGZ; RGB; v += 1;		// 23
-		// indices
-		for (size_t j = 0; j < 36; j++) {
-			*i = 24 * block_n + indices[j];
-			i++;
+
+		// vertex data
+		std::memcpy(v, &packed_vertex_data[0], 72 * sizeof(glm::vec3));
+		for (size_t j = 0; j < 24; j++) {
+			v->x += pos.x; v->y += pos.y; v->z += pos.z;
+			v->r = color.r; v->g = color.g; v->b = color.b;
+			v += 1;
 		}
+
+		// indices
+		std::memcpy(i, indices, 36 * sizeof(unsigned int));
+		for (size_t j = 0; j < 36; j++) {
+			*(i + j) += 24 * block_n;
+		}
+
+		i += 36;
 		block_n++;
 	}
 }
@@ -127,6 +132,7 @@ static void generate_chunk(map_system_t *map, asset_t asset, IndexedMesh *mesh, 
 	const int tex_y = CHUNK_SIZE * zStart;
 	const int tex_z = CHUNK_SIZE * yStart;
 	std::vector<tmp_block_t> blocks;
+	blocks.reserve(CHUNK_SIZE * CHUNK_SIZE * CHUNK_SIZE);
 	HastyNoise::FloatBuffer buffer = map->noise->GetNoiseSet(tex_x, tex_y, tex_z, CHUNK_SIZE, CHUNK_SIZE, CHUNK_SIZE);
 
 	for (size_t x = 0; x < CHUNK_SIZE; x++) {
@@ -183,11 +189,9 @@ static void load_chunks(map_system_t* map, std::vector<glm::ivec3>& to_load)
 	const size_t view_on_flight = (2 * map->view_distance + 1) * (2 * map->view_distance + 1);
 
 	std::stringstream ss;
-	std::vector<glm::ivec3> updated_chunks;
 	for (size_t i = 0; i < to_load.size(); i++) {
 		glm::ivec3& chunk = to_load[i];
 		map_system_t::chunk_t ch;
-		std::printf("[map] loading chunk (%d, %d, %d)\n", VEC3_UNPACK(chunk));
 		if (map->chunk_cache.find(chunk) != map->chunk_cache.end())
 			continue;
 		// this is the max cache size we're willing to deal with
@@ -202,8 +206,10 @@ static void load_chunks(map_system_t* map, std::vector<glm::ivec3>& to_load)
 			map->chunk_cache.insert(std::move(nh));
 		}
 		else {
-			ss.clear(); ss << "ChunkMesh" << map->n_chunks++;
-			ch.mesh_asset = hash_str(ss.str());
+			static uint32_t base = "ChunkMesh"_hash;
+			//ss.clear(); ss << "ChunkMesh" << map->n_chunks++;
+			//ch.mesh_asset = hash_str(ss.str());
+			ch.mesh_asset = base++;
 			map->ctx->emgr.new_entity(&ch.entity, 1);
 			IndexedMesh* mesh = map->ctx->assets.make<IndexedMesh>(ch.mesh_asset);
 			mesh->num_indices = 0;
@@ -211,11 +217,8 @@ static void load_chunks(map_system_t* map, std::vector<glm::ivec3>& to_load)
 			map->chunk_cache.insert({ chunk, ch });
 		}
 		load_chunk(map, chunk, &ch);
-		updated_chunks.push_back(chunk);
+		map->chunk_cache_sorted.push_back(chunk);
 	}
-
-	// load into chunk cache sorted
-	map->chunk_cache_sorted.insert(map->chunk_cache_sorted.end(), updated_chunks.begin(), updated_chunks.end());
 }
 
 static std::vector<glm::ivec3> get_chunks_at(map_system_t* map, glm::ivec3& position, int distance_begin, int distance_end, std::vector<glm::ivec3> &offsets, std::vector<glm::ivec3> &masks)
@@ -235,6 +238,8 @@ static std::vector<glm::ivec3> get_chunks_at(map_system_t* map, glm::ivec3& posi
 
 void map_system_t::init(entity_t camera)
 {
+	packed_vertex_data = gen_packed_cube();
+
 	seed = generate_seed();
 	HastyNoise::loadSimd("./");
 	noise = HastyNoise::CreateNoise(seed, HastyNoise::GetFastestSIMD());
@@ -246,8 +251,6 @@ void map_system_t::init(entity_t camera)
 
 	Camera& cam = ctx->emgr.get_component<Camera>(camera);
 	chunk_coord = get_chunk_pos(cam.pos);
-
-	std::printf("[map] spawned at chunk (%d, %d, %d)\n", VEC3_UNPACK(chunk_coord));
 
 	std::vector<glm::ivec3> offsets = { glm::ivec3(0), glm::ivec3(1, 0, 0), glm::ivec3(0, 0, 1), glm::ivec3(-1, 0, 0), glm::ivec3(0, 0, -1) };
 	std::vector<glm::ivec3> masks = { glm::ivec3(0), glm::ivec3(0, 0, 1), glm::ivec3(1, 0, 0), glm::ivec3(0, 0, 1), glm::ivec3(1, 0, 0) };
