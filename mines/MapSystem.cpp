@@ -296,7 +296,7 @@ void map_system_t::init(entity_t camera)
 	seed = generate_seed();
 	HastyNoise::loadSimd("./");
 	noise = HastyNoise::CreateNoise(seed, HastyNoise::GetFastestSIMD());
-	noise->SetNoiseType(HastyNoise::NoiseType::SimplexFractal);
+	noise->SetNoiseType(HastyNoise::NoiseType::Simplex);
 	noise->SetFrequency(0.05f);
 
 	std::printf("[map] seed=%u\n", seed);
