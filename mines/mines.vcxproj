@@ -193,6 +193,7 @@
     <ClInclude Include="RenderSystem.h" />
     <ClInclude Include="resource.h" />
     <ClInclude Include="Triangle.h" />
+    <ClInclude Include="utils.h" />
     <ClInclude Include="Velocity.h" />
   </ItemGroup>
   <ItemGroup>

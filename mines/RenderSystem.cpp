@@ -7,6 +7,8 @@
 #include <glm/mat4x4.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
+#include <algorithm>
+#include "utils.h"
 
 // components
 #include "RenderMesh.h"
@@ -170,11 +172,11 @@ int render_system_t::init()
         return status;
     }
 
-    if (SDL_GL_SetSwapInterval(1) != 0) {
+    /*if (SDL_GL_SetSwapInterval(1) != 0) {
         std::printf("SDL_GL_SetSwapInterval error: %s\n", SDL_GetError());
         status = RS_ERR_GL;
         return status;
-    }
+    }*/
 
     if (!gladLoadGL()) {
         std::printf("gladLoadGL failed!\n");
@@ -239,6 +241,7 @@ static void handle_new_indexedrendermesh(render_system_t* sys, entity_t e)
     glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, sizeof(IndexedMesh::Vertex), (void*)offsetof(IndexedMesh::Vertex, IndexedMesh::Vertex::r));
 
     cmd.num_verts = mesh->num_indices;
+    cmd.last_update = rm->last_update;
     sys->indexed_cmds.emplace(e, cmd);
 }
 
@@ -258,12 +261,18 @@ static void handle_update_indexedrendermesh(render_system_t* sys, entity_t e)
     IndexedMesh* mesh = sys->ctx->assets.get<IndexedMesh>(rm->indexed_mesh);
     render_system_t::indexed_cmd_t& cmd = sys->indexed_cmds.get<render_system_t::indexed_cmd_t>(e);
 
+    if (cmd.last_update >= rm->last_update)
+        return;
+
     glBindBuffer(GL_ARRAY_BUFFER, cmd.vbo);
     glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(IndexedMesh::Vertex) * mesh->num_verts, mesh->vertices);
+    cmd.last_update = rm->last_update;
 }
 
 void render_system_t::render(entity_t camera)
 {
+    uint32_t before, delta;
+
     // process RenderMesh changes
     state_stream_t *ss = ctx->emgr.get_state_stream<RenderMesh>();
     for (auto& msg : ss->events_back) {
@@ -336,11 +345,15 @@ void render_system_t::render(entity_t camera)
     }
 
     // draw indexed commands
+    uint32_t draw_calls = 0;
     std::pair<entity_t*, indexed_cmd_t*> idx_cmd_arr = indexed_cmds.any_pair<indexed_cmd_t>();
     for (size_t i = 0; i < indexed_cmds.size(); i++) {
         auto& cmd = idx_cmd_arr.second[i];
         entity_t e = idx_cmd_arr.first[i];
         glm::mat4 model = glm::mat4(1.f);
+        IndexedRenderMesh& irm = ctx->emgr.get_component<IndexedRenderMesh>(e);
+        if (!irm.visible)
+            continue;
         if (ctx->emgr.has_component<Position>(e)) {
             Position& pos = ctx->emgr.get_component<Position>(e);
             model = glm::translate(model, pos.pos);
@@ -348,8 +361,11 @@ void render_system_t::render(entity_t camera)
         glUniformMatrix4fv(model_loc, 1, GL_FALSE, glm::value_ptr(model));
         glBindVertexArray(cmd.vao);
         glDrawElements(GL_TRIANGLES, cmd.num_verts, GL_UNSIGNED_INT, (void*)0);
+        draw_calls++;
     }
 
+    TIME_BEGIN;
     SDL_GL_SwapWindow(ctx->win);
+    TIME_END_; if (delta > 10) std::printf("[render] render took %u ms, issued %u draw calls\n", delta, draw_calls);
     /////////////////////////////////
 }

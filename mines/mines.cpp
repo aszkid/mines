@@ -8,6 +8,7 @@
 #include "InputSystem.h"
 #include "CameraSystem.h"
 #include "MapSystem.h"
+#include "utils.h"
 
 #include "Position.h"
 #include "Mesh.h"
@@ -65,7 +66,7 @@ int main(int argc, char **argv)
 
     render_sys.teardown();
 
-    ctx.assets.print();
+    //ctx.assets.print();
 
     return EXIT_SUCCESS;
 }

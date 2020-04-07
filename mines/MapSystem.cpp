@@ -10,6 +10,7 @@
 #include <algorithm>
 #include <array>
 #include <omp.h>
+#include "utils.h"
 
 static const int CHUNK_SIZE = 32;
 
@@ -90,6 +91,7 @@ static void generate_chunk_mesh(map_system_t* map, IndexedMesh *mesh, asset_t a,
 	size_t old_num_verts = mesh->num_verts;
 	mesh->num_verts = 24 * blocks.size();
 	mesh->num_indices = 36 * blocks.size();
+	std::printf("[map] old verts = %zu, new verts = %zu\n", old_num_verts, mesh->num_verts);
 
 	// allocate memory if needed
 	if (mesh->num_verts > old_num_verts) {
@@ -118,15 +120,6 @@ static void generate_chunk_mesh(map_system_t* map, IndexedMesh *mesh, asset_t a,
 		}
 	}
 }
-
-#define TIME_ENABLE
-#ifdef TIME_ENABLE
-#define TIME_BEGIN before = SDL_GetTicks()
-#define TIME_END(s) delta = SDL_GetTicks() - before; std::printf("[map] (tid=%d) " ## s ## " took %u ms\n", omp_get_thread_num(), delta)
-#else
-#define TIME_BEGIN {}
-#define TIME_END {}
-#endif
 
 static void generate_chunk(map_system_t *map, asset_t asset, IndexedMesh *mesh, const glm::uvec3 &tex_offset, const glm::uvec3 &tex_sz, const float *buffer)
 {
@@ -176,6 +169,16 @@ static glm::ivec3 get_chunk_pos(glm::vec3 world_pos)
 
 static void load_chunks(map_system_t* map, std::vector<glm::ivec3>& to_load)
 {
+#define VEC3_DOT(w) (w).x*(w).x + (w).y*(w).y + (w).z*(w).z
+	auto sort_by_distance = [map](glm::ivec3& a, glm::ivec3& b) -> bool {
+		const glm::ivec3 dist_a = map->chunk_coord - a;
+		const glm::ivec3 dist_b = map->chunk_coord - b;
+		const int dot_a = VEC3_DOT(dist_a);
+		const int dot_b = VEC3_DOT(dist_b);
+		return dot_a < dot_b;
+	};
+	std::sort(map->chunk_cache_sorted.begin(), map->chunk_cache_sorted.end(), sort_by_distance);
+
 	const size_t view_on_flight = (2 * map->view_distance + 1) * (2 * map->view_distance + 1);
 
 	int max_x = INT_MIN;
@@ -188,7 +191,6 @@ static void load_chunks(map_system_t* map, std::vector<glm::ivec3>& to_load)
 	uint32_t before, delta;
 
 	// load chunk coordinates, ignore hot chunks
-	TIME_BEGIN;
 	std::vector<std::pair<glm::ivec3, map_system_t::chunk_t>> for_real;
 	for (int i = 0; i < to_load.size(); i++) {
 		glm::ivec3& chunk = to_load[i];
@@ -197,17 +199,19 @@ static void load_chunks(map_system_t* map, std::vector<glm::ivec3>& to_load)
 			continue;
 		// this is the max cache size we're willing to deal with
 		// TODO should depend on the view distance, but how exactly?????
-		if (map->chunk_cache_sorted.size() > view_on_flight * view_on_flight) {
+		if (map->chunk_cache_sorted.size() > view_on_flight * 2) {
+			std::printf("[map] evicting!\n");
 			glm::ivec3 target = map->chunk_cache_sorted.back();
 			map->chunk_cache_sorted.pop_back();
 			auto nh = map->chunk_cache.extract(target);
 			ch = nh.mapped();
 			nh.key() = chunk;
 			map->chunk_cache.insert(std::move(nh));
-		}
-		else {
-			static uint32_t base = "ChunkMesh"_hash;
-			ch.mesh_asset = base++;
+		} else {
+			std::stringstream ss;
+			static uint32_t base = 0;
+			ss << "ChunkMesh" << base++;
+			ch.mesh_asset = hash_str(ss.str());
 			map->ctx->emgr.new_entity(&ch.entity, 1);
 			IndexedMesh* mesh = map->ctx->assets.make<IndexedMesh>(ch.mesh_asset);
 			mesh->num_indices = 0;
@@ -215,7 +219,6 @@ static void load_chunks(map_system_t* map, std::vector<glm::ivec3>& to_load)
 			map->chunk_cache.insert({ chunk, ch });
 		}
 		for_real.push_back({ chunk, ch });
-		map->chunk_cache_sorted.push_back(chunk);
 
 		max_x = std::max(chunk.x, max_x);
 		max_y = std::max(chunk.y, max_y);
@@ -224,7 +227,6 @@ static void load_chunks(map_system_t* map, std::vector<glm::ivec3>& to_load)
 		min_y = std::min(chunk.y, min_y);
 		min_z = std::min(chunk.z, min_z);
 	}
-	TIME_END("chunk decision");
 
 	if (for_real.size() == 0)
 		return;
@@ -251,27 +253,27 @@ static void load_chunks(map_system_t* map, std::vector<glm::ivec3>& to_load)
 	//  at any rate, simply decoupling this work from the main render thread would be progress; allowing
 	//   other systems to do their work, and joining right before we materialize the frame changes.
 	TIME_BEGIN;
-#pragma omp parallel for num_threads(4)
+#pragma omp parallel for num_threads(1)
 	for (int i = 0; i < for_real.size(); i++) {
 		const map_system_t::chunk_t& chunk = for_real[i].second;
 		const glm::ivec3& chunk_coord = for_real[i].first;
 		IndexedMesh* mesh = map->ctx->assets.get<IndexedMesh>(chunk.mesh_asset);
 		const glm::uvec3 offset = CHUNK_SIZE * chunk_coord - glm::ivec3(min_x, min_y, min_z);
+		std::printf("[map] tid(%d) generating chunk (%d, %d, %d)\n", omp_get_thread_num(), VEC3_UNPACK(chunk_coord));
 		generate_chunk(map, chunk.mesh_asset, mesh, offset, tex_sz, texture.get());
 	}
 	TIME_END("heavy lifting");
 
-	// insert chunk components
-	TIME_BEGIN;
+	// insert chunk components and refill cache vector
 	for (int i = 0; i < for_real.size(); i++) {
 		const map_system_t::chunk_t& chunk = for_real[i].second;
 		const glm::ivec3 &chunk_coord = for_real[i].first;
-		map->ctx->emgr.insert_component<IndexedRenderMesh>(chunk.entity, { chunk.mesh_asset });
+		map->chunk_cache_sorted.push_back(chunk_coord);
+		map->ctx->emgr.insert_component<IndexedRenderMesh>(chunk.entity, { chunk.mesh_asset, true, SDL_GetTicks() });
 		map->ctx->emgr.insert_component<Position>(chunk.entity, {
 			(float)CHUNK_SIZE * glm::vec3(chunk_coord)
 		});
 	}
-	TIME_END("component insertion");
 }
 
 static std::vector<glm::ivec3> get_chunks_at(map_system_t* map, glm::ivec3& position, int distance_begin, int distance_end, std::vector<glm::ivec3> &offsets, std::vector<glm::ivec3> &masks)
@@ -319,24 +321,6 @@ void map_system_t::update(entity_t camera)
 		return;
 
 	////////////////////////////////////////////////////
-	// first, sort our chunk cache to optimally 
-	//  choose what chunks to evict
-	////////////////////////////////////////////////////
-
-#define VEC3_DOT(w) (w).x*(w).x + (w).y*(w).y + (w).z*(w).z
-
-	auto sort_by_distance = [&new_chunk_coord](glm::ivec3& a, glm::ivec3& b) -> bool {
-		const glm::ivec3 dist_a = new_chunk_coord - a;
-		const glm::ivec3 dist_b = new_chunk_coord - b;
-		const int dot_a = VEC3_DOT(dist_a);
-		const int dot_b = VEC3_DOT(dist_b);
-		return dot_a < dot_b;
-	};
-	std::sort(chunk_cache_sorted.begin(), chunk_cache_sorted.end(), sort_by_distance);
-	assert(chunk_cache_sorted.size() == chunk_cache.size());
-
-
-	////////////////////////////////////////////////////
 	// compute coordinates of the chunks we want to load
 	////////////////////////////////////////////////////
 
@@ -363,9 +347,23 @@ void map_system_t::update(entity_t camera)
 		masks.insert(masks.end(), { glm::ivec3(1, 0, 0) });
 	}
 
+	// and load them
 	auto to_load = get_chunks_at(this, new_chunk_coord, (int)view_distance, (int)view_distance, offsets, masks);
-
-	// and finally load them
-	load_chunks(this, to_load);
 	chunk_coord = new_chunk_coord;
+	load_chunks(this, to_load);
+
+	// also, hide chunks that are too far away
+	const uint32_t time = SDL_GetTicks();
+	for (auto& ch : chunk_cache) {
+		glm::ivec3 dist = glm::abs(ch.first - chunk_coord);
+		bool visible = !(dist.x > view_distance || dist.y > view_distance || dist.z > view_distance);
+		uint32_t last_update = time;
+		if (ctx->emgr.has_component<IndexedRenderMesh>(ch.second.entity)) {
+			auto& rm = ctx->emgr.get_component<IndexedRenderMesh>(ch.second.entity);
+			last_update = rm.last_update;
+			if (visible == rm.visible)
+				continue;
+		}
+		ctx->emgr.insert_component<IndexedRenderMesh>(ch.second.entity, { ch.second.mesh_asset, visible, last_update });
+	}
 }

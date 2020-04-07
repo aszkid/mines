@@ -110,6 +110,9 @@
     <ClInclude Include="IndexedMesh.h">
       <Filter>Header Files\assets</Filter>
     </ClInclude>
+    <ClInclude Include="utils.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <None Include="INFO.md">

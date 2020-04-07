@@ -18,6 +18,7 @@ struct render_system_t {
 	struct indexed_cmd_t {
 		GLuint vao, vbo, ebo;
 		size_t num_verts;
+		uint32_t last_update;
 	};
 
 	render_system_t(context_t* ctx);
