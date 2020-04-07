@@ -9,6 +9,7 @@
 #include <glm/glm.hpp>
 #include <algorithm>
 #include <array>
+#include <omp.h>
 
 static const int CHUNK_SIZE = 32;
 
@@ -99,30 +100,23 @@ static void generate_chunk_mesh(map_system_t* map, IndexedMesh *mesh, asset_t a,
 		mesh->indices = map->ctx->assets.allocate_chunk<unsigned int>(a, mesh->num_indices);
 	}
 
-	IndexedMesh::Vertex* v = mesh->vertices;
-	unsigned int* i = mesh->indices;
-	
-	size_t block_n = 0;
-	for (auto& blk : blocks) {
+	for (size_t k = 0; k < blocks.size(); k++) {
+		tmp_block_t& blk = blocks[k];
 		glm::vec3& pos = blk.pos;
 		glm::vec3& color = blk.color;
 
 		// vertex data
-		std::memcpy(v, &packed_vertex_data[0], 72 * sizeof(glm::vec3));
+		std::memcpy(&mesh->vertices[24 * k], &packed_vertex_data[0], 72 * sizeof(glm::vec3));
 		for (size_t j = 0; j < 24; j++) {
-			v->x += pos.x; v->y += pos.y; v->z += pos.z;
-			v->r = color.r; v->g = color.g; v->b = color.b;
-			v += 1;
+			mesh->vertices[24 * k + j].x += pos.x; mesh->vertices[24 * k + j].y += pos.y; mesh->vertices[24 * k + j].z += pos.z;
+			mesh->vertices[24 * k + j].r = color.r; mesh->vertices[24 * k + j].g = color.g; mesh->vertices[24 * k + j].b = color.b;
 		}
 
 		// indices
-		std::memcpy(i, indices, 36 * sizeof(unsigned int));
+		std::memcpy(&mesh->indices[36 * k], indices, 36 * sizeof(unsigned int));
 		for (size_t j = 0; j < 36; j++) {
-			*(i + j) += 24 * block_n;
+			mesh->indices[36 * k + j] += 24 * k;
 		}
-
-		i += 36;
-		block_n++;
 	}
 }
 
