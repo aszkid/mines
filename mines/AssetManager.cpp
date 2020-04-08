@@ -57,6 +57,17 @@ void asset_manager_t::free_chunk(const asset_t asset, uint8_t* ptr)
 		it->second.erase(it->second.begin() + idx);
 }
 
+size_t asset_manager_t::get_chunk_size(const asset_t asset, uint8_t* ptr)
+{
+	auto it = chunks.find(asset);
+	if (it == chunks.end())
+		return 0;
+	for (auto chunk : it->second) {
+		if (chunk.ptr == ptr)
+			return chunk.sz;
+	}
+}
+
 void asset_manager_t::print()
 {
 	size_t sum = 0;

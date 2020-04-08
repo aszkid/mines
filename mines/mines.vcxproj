@@ -107,7 +107,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>C:\Users\Pol\Desktop\dev\HastyNoise-0.8.3\HastyNoise;C:\Users\Pol\Desktop\dev\glm-0.9.9.7;C:\Users\Pol\Desktop\dev\assimp-5.0.1\include;C:\Users\Pol\Desktop\dev\opengl-3.3-core\include;C:\Users\Pol\Desktop\dev\SDL2-2.0.12\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>C:\Users\Pol\Desktop\dev\tracy-0.6.3;C:\Users\Pol\Desktop\dev\HastyNoise-0.8.3\HastyNoise;C:\Users\Pol\Desktop\dev\glm-0.9.9.7;C:\Users\Pol\Desktop\dev\assimp-5.0.1\include;C:\Users\Pol\Desktop\dev\opengl-3.3-core\include;C:\Users\Pol\Desktop\dev\SDL2-2.0.12\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp17</LanguageStandard>
       <OpenMPSupport>true</OpenMPSupport>
       <AdditionalOptions>-openmp:experimental %(AdditionalOptions)</AdditionalOptions>
@@ -148,9 +148,9 @@
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>TRACY_ENABLE;NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>C:\Users\Pol\Desktop\dev\HastyNoise-0.8.3\HastyNoise;C:\Users\Pol\Desktop\dev\glm-0.9.9.7;C:\Users\Pol\Desktop\dev\assimp-5.0.1\include;C:\Users\Pol\Desktop\dev\opengl-3.3-core\include;C:\Users\Pol\Desktop\dev\SDL2-2.0.12\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>C:\Users\Pol\Desktop\dev\tracy-0.6.3;C:\Users\Pol\Desktop\dev\HastyNoise-0.8.3\HastyNoise;C:\Users\Pol\Desktop\dev\glm-0.9.9.7;C:\Users\Pol\Desktop\dev\assimp-5.0.1\include;C:\Users\Pol\Desktop\dev\opengl-3.3-core\include;C:\Users\Pol\Desktop\dev\SDL2-2.0.12\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp17</LanguageStandard>
       <OpenMPSupport>true</OpenMPSupport>
       <AdditionalOptions>-openmp:experimental %(AdditionalOptions)</AdditionalOptions>
@@ -166,6 +166,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="..\..\..\..\Desktop\dev\opengl-3.3-core\src\glad.c" />
+    <ClCompile Include="..\..\..\..\Desktop\dev\tracy-0.6.3\TracyClient.cpp" />
     <ClCompile Include="AssetManager.cpp" />
     <ClCompile Include="EntityManager.cpp" />
     <ClCompile Include="hash.cpp" />

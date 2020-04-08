@@ -91,10 +91,10 @@ static void generate_chunk_mesh(map_system_t* map, IndexedMesh *mesh, asset_t a,
 	size_t old_num_verts = mesh->num_verts;
 	mesh->num_verts = 24 * blocks.size();
 	mesh->num_indices = 36 * blocks.size();
-	std::printf("[map] old verts = %zu, new verts = %zu\n", old_num_verts, mesh->num_verts);
 
 	// allocate memory if needed
-	if (mesh->num_verts > old_num_verts) {
+	const size_t old_chunk_sz = map->ctx->assets.get_chunk_size(a, (uint8_t*)mesh->vertices) / sizeof(IndexedMesh::Vertex);
+	if (mesh->vertices == nullptr || old_chunk_sz < mesh->num_verts) {
 		map->ctx->assets.free_chunk(a, (uint8_t*)mesh->vertices);
 		map->ctx->assets.free_chunk(a, (uint8_t*)mesh->indices);
 		mesh->vertices = map->ctx->assets.allocate_chunk<IndexedMesh::Vertex>(a, mesh->num_verts);
@@ -200,7 +200,6 @@ static void load_chunks(map_system_t* map, std::vector<glm::ivec3>& to_load)
 		// this is the max cache size we're willing to deal with
 		// TODO should depend on the view distance, but how exactly?????
 		if (map->chunk_cache_sorted.size() > view_on_flight * 2) {
-			std::printf("[map] evicting!\n");
 			glm::ivec3 target = map->chunk_cache_sorted.back();
 			map->chunk_cache_sorted.pop_back();
 			auto nh = map->chunk_cache.extract(target);
@@ -214,6 +213,8 @@ static void load_chunks(map_system_t* map, std::vector<glm::ivec3>& to_load)
 			ch.mesh_asset = hash_str(ss.str());
 			map->ctx->emgr.new_entity(&ch.entity, 1);
 			IndexedMesh* mesh = map->ctx->assets.make<IndexedMesh>(ch.mesh_asset);
+			mesh->vertices = nullptr;
+			mesh->indices = nullptr;
 			mesh->num_indices = 0;
 			mesh->num_verts = 0;
 			map->chunk_cache.insert({ chunk, ch });
@@ -240,9 +241,7 @@ static void load_chunks(map_system_t* map, std::vector<glm::ivec3>& to_load)
 	int size_z = max_z - min_z;
 	const glm::uvec3 tex_sz(size_x, size_y, size_z);
 
-	TIME_BEGIN;
 	HastyNoise::FloatBuffer texture = map->noise->GetNoiseSet(min_x, min_z, min_y, size_x, size_z, size_y);
-	TIME_END("texture generation");
 
 	// generate chunks (heavy lifting -- go wide)
 	// TODO: this is temporary, we will eventually want to be more systematic about splitting
@@ -252,17 +251,14 @@ static void load_chunks(map_system_t* map, std::vector<glm::ivec3>& to_load)
 	//   then, walking around would be seamless. only flying really fast is an issue.
 	//  at any rate, simply decoupling this work from the main render thread would be progress; allowing
 	//   other systems to do their work, and joining right before we materialize the frame changes.
-	TIME_BEGIN;
-#pragma omp parallel for num_threads(1)
+#pragma omp parallel for num_threads(4)
 	for (int i = 0; i < for_real.size(); i++) {
 		const map_system_t::chunk_t& chunk = for_real[i].second;
 		const glm::ivec3& chunk_coord = for_real[i].first;
 		IndexedMesh* mesh = map->ctx->assets.get<IndexedMesh>(chunk.mesh_asset);
 		const glm::uvec3 offset = CHUNK_SIZE * chunk_coord - glm::ivec3(min_x, min_y, min_z);
-		std::printf("[map] tid(%d) generating chunk (%d, %d, %d)\n", omp_get_thread_num(), VEC3_UNPACK(chunk_coord));
 		generate_chunk(map, chunk.mesh_asset, mesh, offset, tex_sz, texture.get());
 	}
-	TIME_END("heavy lifting");
 
 	// insert chunk components and refill cache vector
 	for (int i = 0; i < for_real.size(); i++) {

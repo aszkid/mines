@@ -65,8 +65,7 @@ int main(int argc, char **argv)
     }
 
     render_sys.teardown();
-
-    //ctx.assets.print();
+    ctx.assets.print();
 
     return EXIT_SUCCESS;
 }

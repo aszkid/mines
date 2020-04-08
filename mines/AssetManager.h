@@ -57,6 +57,8 @@ public:
 		return (T*)get(asset);
 	}
 
+	size_t get_chunk_size(const asset_t asset, uint8_t* ptr);
+
 	void print();
 private:
 	void load(const asset_t asset, uint8_t* data, size_t sz);

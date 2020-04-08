@@ -9,6 +9,7 @@
 #include <glm/gtc/type_ptr.hpp>
 #include <algorithm>
 #include "utils.h"
+#include <Tracy.hpp>
 
 // components
 #include "RenderMesh.h"
@@ -150,20 +151,18 @@ int render_system_t::init()
         return status;
     }
 
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
+    SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
+    SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
+
     ctx->win = SDL_CreateWindow("mines", 100, 100, ctx->width, ctx->height, SDL_WINDOW_OPENGL | SDL_WINDOW_SHOWN);
     if (ctx->win == nullptr) {
         std::printf("SDL_CreateWindow error: %s\n", SDL_GetError());
         status = RS_ERR_SDLWIN;
         return status;
     }
-
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
-    SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
-    SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24); // ?
-    SDL_GL_SetAttribute(SDL_GL_MULTISAMPLEBUFFERS, 1);
-    SDL_GL_SetAttribute(SDL_GL_MULTISAMPLESAMPLES, 4);
 
     ctx->gl_ctx = SDL_GL_CreateContext(ctx->win);
     if (ctx->gl_ctx == nullptr) {
@@ -172,11 +171,11 @@ int render_system_t::init()
         return status;
     }
 
-    /*if (SDL_GL_SetSwapInterval(1) != 0) {
+    if (SDL_GL_SetSwapInterval(1) != 0) {
         std::printf("SDL_GL_SetSwapInterval error: %s\n", SDL_GetError());
         status = RS_ERR_GL;
         return status;
-    }*/
+    }
 
     if (!gladLoadGL()) {
         std::printf("gladLoadGL failed!\n");
@@ -185,7 +184,6 @@ int render_system_t::init()
     }
 
     glEnable(GL_DEPTH_TEST);
-    glEnable(GL_MULTISAMPLE);
     glClearColor(0.5f, 0.f, 0.f, 1.f);
 
     shader = load_shader("./phong.vert", "./phong.frag");
@@ -266,42 +264,50 @@ static void handle_update_indexedrendermesh(render_system_t* sys, entity_t e)
 
     glBindBuffer(GL_ARRAY_BUFFER, cmd.vbo);
     glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(IndexedMesh::Vertex) * mesh->num_verts, mesh->vertices);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, cmd.ebo);
+    glBufferSubData(GL_ELEMENT_ARRAY_BUFFER, 0, sizeof(unsigned int) * mesh->num_indices, mesh->indices);
+    cmd.num_verts = mesh->num_indices;
     cmd.last_update = rm->last_update;
 }
 
 void render_system_t::render(entity_t camera)
 {
     uint32_t before, delta;
+    state_stream_t* ss;
+    ZoneScoped;
 
-    // process RenderMesh changes
-    state_stream_t *ss = ctx->emgr.get_state_stream<RenderMesh>();
-    for (auto& msg : ss->events_back) {
-        switch (msg.type) {
-        case state_msg_header_t::C_NEW:
-            handle_new_rendermesh(this, msg.e);
-            break;
-        case state_msg_header_t::C_UPDATE:
-            handle_update_rendermesh(this, msg.e);
-            break;
-        case state_msg_header_t::C_DELETE:
-            handle_delete_rendermesh(this, msg.e);
-            break;
+    {
+        ZoneScoped("ss_handle");
+        // process RenderMesh changes
+        ss = ctx->emgr.get_state_stream<RenderMesh>();
+        for (auto& msg : ss->events_back) {
+            switch (msg.type) {
+            case state_msg_header_t::C_NEW:
+                handle_new_rendermesh(this, msg.e);
+                break;
+            case state_msg_header_t::C_UPDATE:
+                handle_update_rendermesh(this, msg.e);
+                break;
+            case state_msg_header_t::C_DELETE:
+                handle_delete_rendermesh(this, msg.e);
+                break;
+            }
         }
-    }
 
-    // process IndexedRenderMesh changes
-    ss = ctx->emgr.get_state_stream<IndexedRenderMesh>();
-    for (auto& msg : ss->events_back) {
-        switch (msg.type) {
-        case state_msg_header_t::C_NEW:
-            handle_new_indexedrendermesh(this, msg.e);
-            break;
-        case state_msg_header_t::C_UPDATE:
-            handle_update_indexedrendermesh(this, msg.e);
-            break;
-        default:
-            // TODO update and delete
-            break;
+        // process IndexedRenderMesh changes
+        ss = ctx->emgr.get_state_stream<IndexedRenderMesh>();
+        for (auto& msg : ss->events_back) {
+            switch (msg.type) {
+            case state_msg_header_t::C_NEW:
+                handle_new_indexedrendermesh(this, msg.e);
+                break;
+            case state_msg_header_t::C_UPDATE:
+                handle_update_indexedrendermesh(this, msg.e);
+                break;
+            default:
+                // TODO update and delete
+                break;
+            }
         }
     }
 
@@ -328,44 +334,56 @@ void render_system_t::render(entity_t camera)
     glUniform3f(lightcol_loc, 1.f, 1.f, 1.f);
     glUniform3f(viewpos_loc, cam->pos.x, cam->pos.y, cam->pos.z);
 
-    // draw commands
-    std::pair<entity_t*, cmd_t*> cmd_arr = cmds.any_pair<cmd_t>();
-    for (size_t i = 0; i < cmds.size(); i++) {
-        auto& cmd = cmd_arr.second[i];
-        entity_t e = cmd_arr.first[i];
-        glm::mat4 model = glm::mat4(1.f);
-        if (ctx->emgr.has_component<Position>(e)) {
-            Position& pos = ctx->emgr.get_component<Position>(e);
-            model = glm::translate(model, pos.pos);
+    size_t drawarrs = 0;
+    size_t drawelts = 0;
+
+    {
+        ZoneScoped("draw_normal");
+        // draw commands
+        std::pair<entity_t*, cmd_t*> cmd_arr = cmds.any_pair<cmd_t>();
+        for (size_t i = 0; i < cmds.size(); i++) {
+            auto& cmd = cmd_arr.second[i];
+            entity_t e = cmd_arr.first[i];
+            glm::mat4 model = glm::mat4(1.f);
+            if (ctx->emgr.has_component<Position>(e)) {
+                Position& pos = ctx->emgr.get_component<Position>(e);
+                model = glm::translate(model, pos.pos);
+            }
+            RenderMesh& rm = ctx->emgr.get_component<RenderMesh>(e);
+            glUniformMatrix4fv(model_loc, 1, GL_FALSE, glm::value_ptr(model));
+            glBindVertexArray(cmd.vao);
+            glDrawArrays(GL_TRIANGLES, 0, cmd.num_verts);
+            drawarrs++;
         }
-        RenderMesh& rm = ctx->emgr.get_component<RenderMesh>(e);
-        glUniformMatrix4fv(model_loc, 1, GL_FALSE, glm::value_ptr(model));
-        glBindVertexArray(cmd.vao);
-        glDrawArrays(GL_TRIANGLES, 0, cmd.num_verts);
     }
 
-    // draw indexed commands
-    uint32_t draw_calls = 0;
-    std::pair<entity_t*, indexed_cmd_t*> idx_cmd_arr = indexed_cmds.any_pair<indexed_cmd_t>();
-    for (size_t i = 0; i < indexed_cmds.size(); i++) {
-        auto& cmd = idx_cmd_arr.second[i];
-        entity_t e = idx_cmd_arr.first[i];
-        glm::mat4 model = glm::mat4(1.f);
-        IndexedRenderMesh& irm = ctx->emgr.get_component<IndexedRenderMesh>(e);
-        if (!irm.visible)
-            continue;
-        if (ctx->emgr.has_component<Position>(e)) {
-            Position& pos = ctx->emgr.get_component<Position>(e);
-            model = glm::translate(model, pos.pos);
+    {
+        ZoneScoped("draw_indexed");
+        // draw indexed commands
+        std::pair<entity_t*, indexed_cmd_t*> idx_cmd_arr = indexed_cmds.any_pair<indexed_cmd_t>();
+        for (size_t i = 0; i < indexed_cmds.size(); i++) {
+            auto& cmd = idx_cmd_arr.second[i];
+            entity_t e = idx_cmd_arr.first[i];
+            glm::mat4 model = glm::mat4(1.f);
+            IndexedRenderMesh& irm = ctx->emgr.get_component<IndexedRenderMesh>(e);
+            if (!irm.visible)
+                continue;
+            if (ctx->emgr.has_component<Position>(e)) {
+                Position& pos = ctx->emgr.get_component<Position>(e);
+                model = glm::translate(model, pos.pos);
+            }
+            glUniformMatrix4fv(model_loc, 1, GL_FALSE, glm::value_ptr(model));
+            glBindVertexArray(cmd.vao);
+            glDrawElements(GL_TRIANGLES, cmd.num_verts, GL_UNSIGNED_INT, (void*)0);
+            drawelts++;
         }
-        glUniformMatrix4fv(model_loc, 1, GL_FALSE, glm::value_ptr(model));
-        glBindVertexArray(cmd.vao);
-        glDrawElements(GL_TRIANGLES, cmd.num_verts, GL_UNSIGNED_INT, (void*)0);
-        draw_calls++;
     }
 
-    TIME_BEGIN;
-    SDL_GL_SwapWindow(ctx->win);
-    TIME_END_; if (delta > 10) std::printf("[render] render took %u ms, issued %u draw calls\n", delta, draw_calls);
+    {
+        ZoneScoped("swap");
+        SDL_GL_SwapWindow(ctx->win);
+    }
+
+    FrameMark;
     /////////////////////////////////
 }
