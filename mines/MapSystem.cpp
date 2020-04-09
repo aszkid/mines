@@ -22,7 +22,7 @@ static const size_t CHUNK_3 = CHUNK_2 * CHUNK_1;
 #define VEC3_UNPACK(v) v.x, v.y, v.z
 
 map_system_t::map_system_t(context_t* ctx)
-	: ctx(ctx), view_distance(0), seed(0), chunk_coord(0), n_chunks(0)
+	: ctx(ctx), view_distance(15), seed(0), chunk_coord(0), n_chunks(0)
 {}
 
 map_system_t::~map_system_t()
@@ -197,6 +197,62 @@ static void generate_chunk_mesh(map_system_t* map, IndexedMesh *mesh, asset_t a,
 	}
 }
 
+
+static void generate_quad_mesh(map_system_t* map, IndexedMesh* mesh, const asset_t a, const std::vector<quad_t>& quads)
+{
+	size_t old_num_verts = mesh->num_verts;
+	mesh->num_verts = 24 * quads.size();
+	mesh->num_indices = 36 * quads.size();
+
+	// allocate memory if needed
+	const size_t old_chunk_sz = map->ctx->assets.get_chunk_size(a, (uint8_t*)mesh->vertices) / sizeof(IndexedMesh::Vertex);
+	if (mesh->vertices == nullptr || old_chunk_sz < mesh->num_verts) {
+		map->ctx->assets.free_chunk(a, (uint8_t*)mesh->vertices);
+		map->ctx->assets.free_chunk(a, (uint8_t*)mesh->indices);
+		mesh->vertices = map->ctx->assets.allocate_chunk<IndexedMesh::Vertex>(a, mesh->num_verts);
+		mesh->indices = map->ctx->assets.allocate_chunk<unsigned int>(a, mesh->num_indices);
+	}
+
+	const glm::vec3 color = glm::vec3(0.45f, 0.74f, 0.45f);
+	for (size_t k = 0; k < quads.size(); k++) {
+		const quad_t& q = quads[k];
+		const glm::vec3 pos = glm::vec3(q.x, q.y, q.z);
+
+		// vertex data
+		std::memcpy(&mesh->vertices[24 * k], &packed_vertex_data[0], 72 * sizeof(glm::vec3));
+		const glm::vec3 quad_vs[8] = {
+			glm::vec3(q.x, q.y, q.z),
+			glm::vec3(q.x, q.y, q.z + q.d),
+			glm::vec3(q.x + q.w, q.y, q.z + q.d),
+			glm::vec3(q.x + q.w, q.y, q.z),
+			glm::vec3(q.x, q.y + q.h, q.z),
+			glm::vec3(q.x, q.y + q.h, q.z + q.d),
+			glm::vec3(q.x + q.w, q.y + q.h, q.z + q.d),
+			glm::vec3(q.x + q.w, q.y + q.h, q.z)
+		};
+		const glm::vec3 quad_ids[24] = {
+			quad_vs[0], quad_vs[1], quad_vs[2], quad_vs[3],
+			quad_vs[4], quad_vs[5], quad_vs[6], quad_vs[7],
+			quad_vs[0], quad_vs[1], quad_vs[5], quad_vs[4],
+			quad_vs[3], quad_vs[2], quad_vs[6], quad_vs[7],
+			quad_vs[1], quad_vs[2], quad_vs[6], quad_vs[5],
+			quad_vs[0], quad_vs[3], quad_vs[7], quad_vs[4]
+		};
+		for (size_t j = 0; j < 24; j++) {
+			mesh->vertices[24 * k + j].x = quad_ids[j].x; mesh->vertices[24 * k + j].y = quad_ids[j].y; mesh->vertices[24 * k + j].z = quad_ids[j].z;
+			mesh->vertices[24 * k + j].nx = normal_data[j].x; mesh->vertices[24 * k + j].ny = normal_data[j].y; mesh->vertices[24 * k + j].nz = normal_data[j].z;
+			mesh->vertices[24 * k + j].r = color.r; mesh->vertices[24 * k + j].g = color.g; mesh->vertices[24 * k + j].b = color.b;
+		}
+
+		// indices
+		std::memcpy(&mesh->indices[36 * k], indices, 36 * sizeof(unsigned int));
+		for (size_t j = 0; j < 36; j++) {
+			mesh->indices[36 * k + j] += 24 * k;
+		}
+	}
+}
+
+
 static void generate_chunk(map_system_t *map, asset_t asset, IndexedMesh *mesh, const glm::uvec3 &tex_offset, const glm::uvec3 &tex_sz, const float *buffer)
 {
 	uint32_t before, delta;
@@ -229,13 +285,10 @@ static void generate_chunk(map_system_t *map, asset_t asset, IndexedMesh *mesh, 
 	}
 
 	auto quads = blocks_to_mesh_greedy(block_markers);
-	std::printf("[map] greedy gives %zu quads\n", quads.size());
-	for (auto& q : quads) {
-		std::printf("[map]    quad: (%u, %u, %u), w=%u, h=%u, d=%u\n", q.x, q.y, q.z, q.w, q.h, q.d);
-	}
 	delete[] block_markers;
 
-	generate_chunk_mesh(map, mesh, asset, blocks);
+	//generate_chunk_mesh(map, mesh, asset, blocks);
+	generate_quad_mesh(map, mesh, asset, quads);
 }
 
 static uint32_t generate_seed()

@@ -325,7 +325,7 @@ void render_system_t::render(entity_t camera)
 
         cam = &ctx->emgr.get_component<Camera>(camera);
         view = glm::lookAt(cam->pos, cam->pos + cam->look(), cam->up);
-        projection = glm::perspectiveFov(cam->fov, (float)ctx->width, (float)ctx->height, 0.1f, 500.f);
+        projection = glm::perspectiveFov(cam->fov, (float)ctx->width, (float)ctx->height, 0.1f, 1000.f);
 
         /////////////////////////////////
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
