@@ -22,7 +22,7 @@ static const size_t CHUNK_3 = CHUNK_2 * CHUNK_1;
 #define VEC3_UNPACK(v) v.x, v.y, v.z
 
 map_system_t::map_system_t(context_t* ctx)
-	: ctx(ctx), view_distance(15), seed(0), chunk_coord(0), n_chunks(0)
+	: ctx(ctx), view_distance(7), seed(0), chunk_coord(0), n_chunks(0)
 {}
 
 map_system_t::~map_system_t()
@@ -255,6 +255,8 @@ static void generate_quad_mesh(map_system_t* map, IndexedMesh* mesh, const asset
 
 static void generate_chunk(map_system_t *map, asset_t asset, IndexedMesh *mesh, const glm::uvec3 &tex_offset, const glm::uvec3 &tex_sz, const float *buffer)
 {
+	ZoneScoped;
+
 	uint32_t before, delta;
 	std::vector<tmp_block_t> blocks;
 	blocks.reserve(CHUNK_SIZE * CHUNK_SIZE * CHUNK_SIZE);
@@ -284,11 +286,18 @@ static void generate_chunk(map_system_t *map, asset_t asset, IndexedMesh *mesh, 
 		}
 	}
 
-	auto quads = blocks_to_mesh_greedy(block_markers);
-	delete[] block_markers;
+	std::vector<quad_t> quads;
+	{
+		ZoneScoped("greedy");
+		quads = blocks_to_mesh_greedy(block_markers);
+		delete[] block_markers;
+	}
 
-	//generate_chunk_mesh(map, mesh, asset, blocks);
-	generate_quad_mesh(map, mesh, asset, quads);
+	{
+		ZoneScoped("generate_mesh");
+		//generate_chunk_mesh(map, mesh, asset, blocks);
+		generate_quad_mesh(map, mesh, asset, quads);
+	}
 }
 
 static uint32_t generate_seed()
@@ -310,15 +319,20 @@ static glm::ivec3 get_chunk_pos(glm::vec3 world_pos)
 
 static void load_chunks(map_system_t* map, std::vector<glm::ivec3>& to_load)
 {
+	ZoneScoped;
+
 #define VEC3_DOT(w) (w).x*(w).x + (w).y*(w).y + (w).z*(w).z
-	auto sort_by_distance = [map](glm::ivec3& a, glm::ivec3& b) -> bool {
-		const glm::ivec3 dist_a = map->chunk_coord - a;
-		const glm::ivec3 dist_b = map->chunk_coord - b;
-		const int dot_a = VEC3_DOT(dist_a);
-		const int dot_b = VEC3_DOT(dist_b);
-		return dot_a < dot_b;
-	};
-	std::sort(map->chunk_cache_sorted.begin(), map->chunk_cache_sorted.end(), sort_by_distance);
+	{
+		ZoneScoped("cache_sort");
+		auto sort_by_distance = [map](glm::ivec3& a, glm::ivec3& b) -> bool {
+			const glm::ivec3 dist_a = map->chunk_coord - a;
+			const glm::ivec3 dist_b = map->chunk_coord - b;
+			const int dot_a = VEC3_DOT(dist_a);
+			const int dot_b = VEC3_DOT(dist_b);
+			return dot_a < dot_b;
+		};
+		std::sort(map->chunk_cache_sorted.begin(), map->chunk_cache_sorted.end(), sort_by_distance);
+	}
 
 	const size_t view_on_flight = (2 * map->view_distance + 1) * (2 * map->view_distance + 1);
 
@@ -333,45 +347,48 @@ static void load_chunks(map_system_t* map, std::vector<glm::ivec3>& to_load)
 
 	// load chunk coordinates, ignore hot chunks
 	std::vector<std::pair<glm::ivec3, map_system_t::chunk_t>> for_real;
-	for (int i = 0; i < to_load.size(); i++) {
-		glm::ivec3& chunk = to_load[i];
-		map_system_t::chunk_t ch;
-		if (map->chunk_cache.find(chunk) != map->chunk_cache.end())
-			continue;
-		// this is the max cache size we're willing to deal with
-		// TODO should depend on the view distance, but how exactly?????
-		if (map->chunk_cache_sorted.size() > view_on_flight * 2) {
-			glm::ivec3 target = map->chunk_cache_sorted.back();
-			map->chunk_cache_sorted.pop_back();
-			auto nh = map->chunk_cache.extract(target);
-			ch = nh.mapped();
-			nh.key() = chunk;
-			map->chunk_cache.insert(std::move(nh));
-		} else {
-			std::stringstream ss;
-			static uint32_t base = 0;
-			ss << "ChunkMesh" << base++;
-			ch.mesh_asset = hash_str(ss.str());
-			map->ctx->emgr.new_entity(&ch.entity, 1);
-			IndexedMesh* mesh = map->ctx->assets.make<IndexedMesh>(ch.mesh_asset);
-			mesh->vertices = nullptr;
-			mesh->indices = nullptr;
-			mesh->num_indices = 0;
-			mesh->num_verts = 0;
-			map->chunk_cache.insert({ chunk, ch });
+	{
+		ZoneScoped("chunk_prepare");
+		for (int i = 0; i < to_load.size(); i++) {
+			glm::ivec3& chunk = to_load[i];
+			map_system_t::chunk_t ch;
+			if (map->chunk_cache.find(chunk) != map->chunk_cache.end())
+				continue;
+			// this is the max cache size we're willing to deal with
+			// TODO should depend on the view distance, but how exactly?????
+			if (map->chunk_cache_sorted.size() > view_on_flight * 2) {
+				glm::ivec3 target = map->chunk_cache_sorted.back();
+				map->chunk_cache_sorted.pop_back();
+				auto nh = map->chunk_cache.extract(target);
+				ch = nh.mapped();
+				nh.key() = chunk;
+				map->chunk_cache.insert(std::move(nh));
+			} else {
+				std::stringstream ss;
+				static uint32_t base = 0;
+				ss << "ChunkMesh" << base++;
+				ch.mesh_asset = hash_str(ss.str());
+				map->ctx->emgr.new_entity(&ch.entity, 1);
+				IndexedMesh* mesh = map->ctx->assets.make<IndexedMesh>(ch.mesh_asset);
+				mesh->vertices = nullptr;
+				mesh->indices = nullptr;
+				mesh->num_indices = 0;
+				mesh->num_verts = 0;
+				map->chunk_cache.insert({ chunk, ch });
+			}
+			for_real.push_back({ chunk, ch });
+
+			max_x = std::max(chunk.x, max_x);
+			max_y = std::max(chunk.y, max_y);
+			max_z = std::max(chunk.z, max_z);
+			min_x = std::min(chunk.x, min_x);
+			min_y = std::min(chunk.y, min_y);
+			min_z = std::min(chunk.z, min_z);
 		}
-		for_real.push_back({ chunk, ch });
 
-		max_x = std::max(chunk.x, max_x);
-		max_y = std::max(chunk.y, max_y);
-		max_z = std::max(chunk.z, max_z);
-		min_x = std::min(chunk.x, min_x);
-		min_y = std::min(chunk.y, min_y);
-		min_z = std::min(chunk.z, min_z);
+		if (for_real.size() == 0)
+			return;
 	}
-
-	if (for_real.size() == 0)
-		return;
 
 	// generate texture needed to sample all the chunks
 	min_x *= CHUNK_SIZE; max_x = (max_x + 1) * CHUNK_SIZE;
@@ -382,7 +399,13 @@ static void load_chunks(map_system_t* map, std::vector<glm::ivec3>& to_load)
 	int size_z = max_z - min_z;
 	const glm::uvec3 tex_sz(size_x, size_y, size_z);
 
-	HastyNoise::FloatBuffer texture = map->noise->GetNoiseSet(min_x, min_z, min_y, size_x, size_z, size_y);
+	/////////////////////////////////////////////////////////////////////////
+	// TODO: this is stupid! let each thread generate its own texture!!!
+	HastyNoise::FloatBuffer texture;
+	{
+		ZoneScoped("noise_gen");
+		texture = map->noise->GetNoiseSet(min_x, min_z, min_y, size_x, size_z, size_y);
+	}
 
 	// generate chunks (heavy lifting -- go wide)
 	// TODO: this is temporary, we will eventually want to be more systematic about splitting
