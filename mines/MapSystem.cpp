@@ -109,6 +109,10 @@ static std::vector<quad_t> blocks_to_mesh_greedy(const int *blocks)
 		greedy_bitset[i] = blocks[i] != 0;
 	}
 	
+	///////////////////////////////////////////////////////
+	// TODO: should build quads from different corners in
+	//       the chunk and then stick with the best result.
+
 	// sweep 2D planes from y=0 to y=CHUNK_SIZE-1
 	std::vector<quad_t> quads;
 	for (unsigned y = 0; y < CHUNK_1; y++) {
@@ -219,7 +223,6 @@ static void generate_quad_mesh(map_system_t* map, IndexedMesh* mesh, const asset
 		const glm::vec3 pos = glm::vec3(q.x, q.y, q.z);
 
 		// vertex data
-		std::memcpy(&mesh->vertices[24 * k], &packed_vertex_data[0], 72 * sizeof(glm::vec3));
 		const glm::vec3 quad_vs[8] = {
 			glm::vec3(q.x, q.y, q.z),
 			glm::vec3(q.x, q.y, q.z + q.d),
@@ -253,13 +256,23 @@ static void generate_quad_mesh(map_system_t* map, IndexedMesh* mesh, const asset
 }
 
 
-static void generate_chunk(map_system_t *map, asset_t asset, IndexedMesh *mesh, const glm::uvec3 &tex_offset, const glm::uvec3 &tex_sz, const float *buffer)
+static void generate_chunk(map_system_t *map, asset_t asset, IndexedMesh *mesh, glm::ivec3 coordinate)
 {
 	ZoneScoped;
 
 	uint32_t before, delta;
 	std::vector<tmp_block_t> blocks;
 	blocks.reserve(CHUNK_SIZE * CHUNK_SIZE * CHUNK_SIZE);
+
+	coordinate = (int)CHUNK_SIZE * coordinate;
+	HastyNoise::FloatBuffer texture;
+	{
+		ZoneScoped("noise_gen");
+		texture = map->noise->GetNoiseSet(coordinate.x, coordinate.z, coordinate.y, CHUNK_SIZE, CHUNK_SIZE, CHUNK_SIZE);
+	}
+	glm::uvec3 tex_offset(0);
+	glm::uvec3 tex_sz(CHUNK_SIZE);
+	float* buffer = texture.get();
 
 	int* block_markers = new int[CHUNK_3];
 
@@ -321,31 +334,19 @@ static void load_chunks(map_system_t* map, std::vector<glm::ivec3>& to_load)
 {
 	ZoneScoped;
 
-#define VEC3_DOT(w) (w).x*(w).x + (w).y*(w).y + (w).z*(w).z
 	{
 		ZoneScoped("cache_sort");
-		auto sort_by_distance = [map](glm::ivec3& a, glm::ivec3& b) -> bool {
-			const glm::ivec3 dist_a = map->chunk_coord - a;
-			const glm::ivec3 dist_b = map->chunk_coord - b;
-			const int dot_a = VEC3_DOT(dist_a);
-			const int dot_b = VEC3_DOT(dist_b);
-			return dot_a < dot_b;
+		static const auto sort_by_distance = [map](glm::ivec3& a, glm::ivec3& b) -> bool {
+			glm::vec3 aa(a); glm::vec3 bb(b);
+			glm::vec3 pos(map->chunk_coord);
+			return glm::distance(pos, aa) < glm::distance(pos, bb);
 		};
 		std::sort(map->chunk_cache_sorted.begin(), map->chunk_cache_sorted.end(), sort_by_distance);
 	}
 
-	const size_t view_on_flight = (2 * map->view_distance + 1) * (2 * map->view_distance + 1);
-
-	int max_x = INT_MIN;
-	int max_y = INT_MIN;
-	int max_z = INT_MIN;
-	int min_x = INT_MAX;
-	int min_y = INT_MAX;
-	int min_z = INT_MAX;
-
-	uint32_t before, delta;
 
 	// load chunk coordinates, ignore hot chunks
+	static const size_t view_on_flight = (2 * map->view_distance + 1) * (2 * map->view_distance + 1);
 	std::vector<std::pair<glm::ivec3, map_system_t::chunk_t>> for_real;
 	{
 		ZoneScoped("chunk_prepare");
@@ -377,34 +378,10 @@ static void load_chunks(map_system_t* map, std::vector<glm::ivec3>& to_load)
 				map->chunk_cache.insert({ chunk, ch });
 			}
 			for_real.push_back({ chunk, ch });
-
-			max_x = std::max(chunk.x, max_x);
-			max_y = std::max(chunk.y, max_y);
-			max_z = std::max(chunk.z, max_z);
-			min_x = std::min(chunk.x, min_x);
-			min_y = std::min(chunk.y, min_y);
-			min_z = std::min(chunk.z, min_z);
 		}
 
 		if (for_real.size() == 0)
 			return;
-	}
-
-	// generate texture needed to sample all the chunks
-	min_x *= CHUNK_SIZE; max_x = (max_x + 1) * CHUNK_SIZE;
-	min_y *= CHUNK_SIZE; max_y = (max_y + 1) * CHUNK_SIZE;
-	min_z *= CHUNK_SIZE; max_z = (max_z + 1) * CHUNK_SIZE;
-	int size_x = max_x - min_x;
-	int size_y = max_y - min_y;
-	int size_z = max_z - min_z;
-	const glm::uvec3 tex_sz(size_x, size_y, size_z);
-
-	/////////////////////////////////////////////////////////////////////////
-	// TODO: this is stupid! let each thread generate its own texture!!!
-	HastyNoise::FloatBuffer texture;
-	{
-		ZoneScoped("noise_gen");
-		texture = map->noise->GetNoiseSet(min_x, min_z, min_y, size_x, size_z, size_y);
 	}
 
 	// generate chunks (heavy lifting -- go wide)
@@ -415,13 +392,13 @@ static void load_chunks(map_system_t* map, std::vector<glm::ivec3>& to_load)
 	//   then, walking around would be seamless. only flying really fast is an issue.
 	//  at any rate, simply decoupling this work from the main render thread would be progress; allowing
 	//   other systems to do their work, and joining right before we materialize the frame changes.
+	// TODO2: this is thread unsafe -- we are allocating stuff from the asset manager,
+	//        which right now has no locking.
 #pragma omp parallel for num_threads(4)
 	for (int i = 0; i < for_real.size(); i++) {
 		const map_system_t::chunk_t& chunk = for_real[i].second;
-		const glm::ivec3& chunk_coord = for_real[i].first;
 		IndexedMesh* mesh = map->ctx->assets.get<IndexedMesh>(chunk.mesh_asset);
-		const glm::uvec3 offset = CHUNK_SIZE * chunk_coord - glm::ivec3(min_x, min_y, min_z);
-		generate_chunk(map, chunk.mesh_asset, mesh, offset, tex_sz, texture.get());
+		generate_chunk(map, chunk.mesh_asset, mesh, for_real[i].first);
 	}
 
 	// insert chunk components and refill cache vector
