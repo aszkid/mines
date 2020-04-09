@@ -157,6 +157,8 @@ int render_system_t::init()
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
     SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 0);
     SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
+    SDL_GL_SetAttribute(SDL_GL_MULTISAMPLEBUFFERS, 1);
+    SDL_GL_SetAttribute(SDL_GL_MULTISAMPLESAMPLES, 2);
 
     ctx->win = SDL_CreateWindow("mines", 100, 100, ctx->width, ctx->height, SDL_WINDOW_OPENGL | SDL_WINDOW_SHOWN);
     if (ctx->win == nullptr) {
@@ -185,7 +187,8 @@ int render_system_t::init()
     }
 
     glEnable(GL_DEPTH_TEST);
-    glClearColor(0.5f, 0.f, 0.f, 1.f);
+    glEnable(GL_MULTISAMPLE);
+    glClearColor(0.8f, 0.9f, 0.9f, 1.f);
 
     shader = load_shader("./phong.vert", "./phong.frag");
 

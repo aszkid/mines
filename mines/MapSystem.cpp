@@ -12,13 +12,17 @@
 #include <omp.h>
 #include "utils.h"
 #include <Tracy.hpp>
+#include <bitset>
 
 static const int CHUNK_SIZE = 32;
+static const size_t CHUNK_1 = static_cast<size_t>(CHUNK_SIZE);
+static const size_t CHUNK_2 = CHUNK_1 * CHUNK_1;
+static const size_t CHUNK_3 = CHUNK_2 * CHUNK_1;
 
 #define VEC3_UNPACK(v) v.x, v.y, v.z
 
 map_system_t::map_system_t(context_t* ctx)
-	: ctx(ctx), view_distance(5), seed(0), chunk_coord(0), n_chunks(0)
+	: ctx(ctx), view_distance(0), seed(0), chunk_coord(0), n_chunks(0)
 {}
 
 map_system_t::~map_system_t()
@@ -87,6 +91,77 @@ static std::array<glm::vec3, 72> gen_packed_cube()
 static std::array <glm::vec3, 72> packed_vertex_data;
 ////////////////////////////////////////////
 
+struct quad_t {
+	unsigned x, y, z, w, h, d;
+};
+
+static thread_local std::bitset<CHUNK_3> greedy_bitset;
+static std::vector<quad_t> blocks_to_mesh_greedy(const int *blocks)
+{
+	greedy_bitset.reset();
+
+	auto bit_at = [](size_t x, size_t y, size_t z) {
+		return greedy_bitset[CHUNK_2 * x + CHUNK_1 * z + y];
+	};
+
+	// initialize bitset
+	for (size_t i = 0; i < CHUNK_3; i++) {
+		greedy_bitset[i] = blocks[i] != 0;
+	}
+	
+	// sweep 2D planes from y=0 to y=CHUNK_SIZE-1
+	std::vector<quad_t> quads;
+	for (unsigned y = 0; y < CHUNK_1; y++) {
+		for (unsigned z = 0; z < CHUNK_1; z++) {
+			for (unsigned x = 0; x < CHUNK_1; x++) {
+				// find a set block
+				if (!bit_at(x, y, z))
+					continue;
+				// otherwise, generate quad starting at (x, y, z)
+				// stretch the x axis
+				unsigned i;
+				for (i = x; i < CHUNK_1 && bit_at(i, y, z); i++) {}
+				unsigned w = i - x;
+				// stretch the z axis
+				unsigned j;
+				for (j = z + 1; j < CHUNK_1; j++) {
+					for (i = x; i < x + w && bit_at(i, y, j); i++) {}
+					if (i != x + w)
+						break;
+				}
+				unsigned d = j - z;
+				// stretch the y axis
+				unsigned k;
+				for (k = y + 1; k < CHUNK_1; k++) {
+					for (j = z; j < z + d; j++) {
+						for (i = x; i < x + w && bit_at(i, k, j); i++) {}
+						if (i != x + w)
+							break;
+					}
+					if (j != z + d)
+						break;
+				}
+				unsigned h = k - y;
+
+				// submit quad
+				quad_t q = { x, y, z, w, h, d };
+				quads.push_back(q);
+
+				// mark bitmask
+				for (i = x; i < x + w; i++) {
+					for (j = z; j < z + d; j++) {
+						for (k = y; k < y + h; k++) {
+							bit_at(i, k, j) = false;
+						}
+					}
+				}
+			}
+		}
+	}
+	return quads;
+}
+
+
 static void generate_chunk_mesh(map_system_t* map, IndexedMesh *mesh, asset_t a, std::vector<tmp_block_t> &blocks)
 {
 	size_t old_num_verts = mesh->num_verts;
@@ -128,6 +203,8 @@ static void generate_chunk(map_system_t *map, asset_t asset, IndexedMesh *mesh, 
 	std::vector<tmp_block_t> blocks;
 	blocks.reserve(CHUNK_SIZE * CHUNK_SIZE * CHUNK_SIZE);
 
+	int* block_markers = new int[CHUNK_3];
+
 	for (size_t x = 0; x < CHUNK_SIZE; x++) {
 		for (size_t z = 0; z < CHUNK_SIZE; z++) {
 			for (size_t y = 0; y < CHUNK_SIZE; y++) {
@@ -135,18 +212,28 @@ static void generate_chunk(map_system_t *map, asset_t asset, IndexedMesh *mesh, 
 				const float val = buffer[tex_idx];
 				if (val > 0.f && val < .2f) {
 					//chunk.blocks[x][y][z].type = chunk_t::block_t::GRASS;
-					blocks.push_back({ glm::vec3(x, y, z), glm::vec3(0.f, 1.f, 0.f) });
+					block_markers[x * CHUNK_2 + z * CHUNK_1 + y] = 1;
+					blocks.push_back({ glm::vec3(x, y, z), glm::vec3(0.45f, 0.74f, 0.45f) });
 				}
 				else if (val > .2f) {
 					//chunk.blocks[x][y][z].type = chunk_t::block_t::ROCK;
+					block_markers[x * CHUNK_2 + z * CHUNK_1 + y] = 2;
 					blocks.push_back({ glm::vec3(x, y, z), glm::vec3(.4f, .4f, .4f) });
 				}
 				else {
+					block_markers[x * CHUNK_2 + z * CHUNK_1 + y] = 0;
 					//chunk.blocks[x][y][z].type = chunk_t::block_t::AIR;
 				}
 			}
 		}
 	}
+
+	auto quads = blocks_to_mesh_greedy(block_markers);
+	std::printf("[map] greedy gives %zu quads\n", quads.size());
+	for (auto& q : quads) {
+		std::printf("[map]    quad: (%u, %u, %u), w=%u, h=%u, d=%u\n", q.x, q.y, q.z, q.w, q.h, q.d);
+	}
+	delete[] block_markers;
 
 	generate_chunk_mesh(map, mesh, asset, blocks);
 }

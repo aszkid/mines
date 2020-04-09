@@ -58,7 +58,7 @@ int main(int argc, char **argv)
 
         // run systems
         camera_sys.update(camera);
-        map_sys.update(camera);
+        //map_sys.update(camera);
         if (input_sys.update() != 0)
             break;
         render_sys.render(camera);
