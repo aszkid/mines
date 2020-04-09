@@ -11,13 +11,14 @@
 #include <array>
 #include <omp.h>
 #include "utils.h"
+#include <Tracy.hpp>
 
 static const int CHUNK_SIZE = 32;
 
 #define VEC3_UNPACK(v) v.x, v.y, v.z
 
 map_system_t::map_system_t(context_t* ctx)
-	: ctx(ctx), view_distance(3), seed(0), chunk_coord(0), n_chunks(0)
+	: ctx(ctx), view_distance(5), seed(0), chunk_coord(0), n_chunks(0)
 {}
 
 map_system_t::~map_system_t()
@@ -346,7 +347,10 @@ void map_system_t::update(entity_t camera)
 	// and load them
 	auto to_load = get_chunks_at(this, new_chunk_coord, (int)view_distance, (int)view_distance, offsets, masks);
 	chunk_coord = new_chunk_coord;
-	load_chunks(this, to_load);
+	{
+		ZoneScoped;
+		load_chunks(this, to_load);
+	}
 
 	// also, hide chunks that are too far away
 	const uint32_t time = SDL_GetTicks();

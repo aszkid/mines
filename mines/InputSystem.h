@@ -17,6 +17,9 @@ public:
 			switch (e.type) {
 			case SDL_QUIT:
 				return 1;
+			case SDL_KEYDOWN:
+				if (e.key.keysym.scancode == SDL_SCANCODE_Q)
+					return 1;
 			default:
 				break;
 			}

@@ -154,7 +154,7 @@ int render_system_t::init()
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
-    SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
+    SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 0);
     SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
 
     ctx->win = SDL_CreateWindow("mines", 100, 100, ctx->width, ctx->height, SDL_WINDOW_OPENGL | SDL_WINDOW_SHOWN);
@@ -171,7 +171,7 @@ int render_system_t::init()
         return status;
     }
 
-    if (SDL_GL_SetSwapInterval(1) != 0) {
+    if (SDL_GL_SetSwapInterval(0) != 0) {
         std::printf("SDL_GL_SetSwapInterval error: %s\n", SDL_GetError());
         status = RS_ERR_GL;
         return status;
@@ -238,7 +238,7 @@ static void handle_new_indexedrendermesh(render_system_t* sys, entity_t e)
     glEnableVertexAttribArray(2);
     glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, sizeof(IndexedMesh::Vertex), (void*)offsetof(IndexedMesh::Vertex, IndexedMesh::Vertex::r));
 
-    cmd.num_verts = mesh->num_indices;
+    cmd.num_triangles = mesh->num_indices;
     cmd.last_update = rm->last_update;
     sys->indexed_cmds.emplace(e, cmd);
 }
@@ -266,7 +266,7 @@ static void handle_update_indexedrendermesh(render_system_t* sys, entity_t e)
     glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(IndexedMesh::Vertex) * mesh->num_verts, mesh->vertices);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, cmd.ebo);
     glBufferSubData(GL_ELEMENT_ARRAY_BUFFER, 0, sizeof(unsigned int) * mesh->num_indices, mesh->indices);
-    cmd.num_verts = mesh->num_indices;
+    cmd.num_triangles = mesh->num_indices;
     cmd.last_update = rm->last_update;
 }
 
@@ -274,10 +274,11 @@ void render_system_t::render(entity_t camera)
 {
     uint32_t before, delta;
     state_stream_t* ss;
+    size_t tris = 0;
     ZoneScoped;
 
     {
-        ZoneScoped("ss_handle");
+        ZoneScoped("render_work");
         // process RenderMesh changes
         ss = ctx->emgr.get_state_stream<RenderMesh>();
         for (auto& msg : ss->events_back) {
@@ -309,36 +310,30 @@ void render_system_t::render(entity_t camera)
                 break;
             }
         }
-    }
 
-    Camera* cam = &ctx->emgr.get_component<Camera>(camera);
-    glm::mat4 view = glm::lookAt(cam->pos, cam->pos + cam->look(), cam->up);
-    glm::mat4 projection = glm::perspectiveFov(cam->fov, (float)ctx->width, (float)ctx->height, 0.1f, 500.f);
+        Camera* cam = &ctx->emgr.get_component<Camera>(camera);
+        glm::mat4 view = glm::lookAt(cam->pos, cam->pos + cam->look(), cam->up);
+        glm::mat4 projection = glm::perspectiveFov(cam->fov, (float)ctx->width, (float)ctx->height, 0.1f, 500.f);
 
-    /////////////////////////////////
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-    glUseProgram(shader);
+        /////////////////////////////////
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        glUseProgram(shader);
 
-    // get uniform locations
-    int projection_loc = glGetUniformLocation(shader, "projection");
-    int model_loc = glGetUniformLocation(shader, "model");
-    int view_loc = glGetUniformLocation(shader, "view");
-    int lightpos_loc = glGetUniformLocation(shader, "lightPos");
-    int lightcol_loc = glGetUniformLocation(shader, "lightColor");
-    int viewpos_loc = glGetUniformLocation(shader, "viewPos");
+        // get uniform locations
+        int projection_loc = glGetUniformLocation(shader, "projection");
+        int model_loc = glGetUniformLocation(shader, "model");
+        int view_loc = glGetUniformLocation(shader, "view");
+        int lightpos_loc = glGetUniformLocation(shader, "lightPos");
+        int lightcol_loc = glGetUniformLocation(shader, "lightColor");
+        int viewpos_loc = glGetUniformLocation(shader, "viewPos");
 
-    // set uniform values
-    glUniformMatrix4fv(projection_loc, 1, GL_FALSE, glm::value_ptr(projection));
-    glUniformMatrix4fv(view_loc, 1, GL_FALSE, glm::value_ptr(view));
-    glUniform3f(lightpos_loc, -10.f, 64.f, 32.f);
-    glUniform3f(lightcol_loc, 1.f, 1.f, 1.f);
-    glUniform3f(viewpos_loc, cam->pos.x, cam->pos.y, cam->pos.z);
+        // set uniform values
+        glUniformMatrix4fv(projection_loc, 1, GL_FALSE, glm::value_ptr(projection));
+        glUniformMatrix4fv(view_loc, 1, GL_FALSE, glm::value_ptr(view));
+        glUniform3f(lightpos_loc, -10.f, 64.f, 32.f);
+        glUniform3f(lightcol_loc, 1.f, 1.f, 1.f);
+        glUniform3f(viewpos_loc, cam->pos.x, cam->pos.y, cam->pos.z);
 
-    size_t drawarrs = 0;
-    size_t drawelts = 0;
-
-    {
-        ZoneScoped("draw_normal");
         // draw commands
         std::pair<entity_t*, cmd_t*> cmd_arr = cmds.any_pair<cmd_t>();
         for (size_t i = 0; i < cmds.size(); i++) {
@@ -353,12 +348,9 @@ void render_system_t::render(entity_t camera)
             glUniformMatrix4fv(model_loc, 1, GL_FALSE, glm::value_ptr(model));
             glBindVertexArray(cmd.vao);
             glDrawArrays(GL_TRIANGLES, 0, cmd.num_verts);
-            drawarrs++;
+            tris += cmd.num_verts / 3;
         }
-    }
 
-    {
-        ZoneScoped("draw_indexed");
         // draw indexed commands
         std::pair<entity_t*, indexed_cmd_t*> idx_cmd_arr = indexed_cmds.any_pair<indexed_cmd_t>();
         for (size_t i = 0; i < indexed_cmds.size(); i++) {
@@ -374,8 +366,8 @@ void render_system_t::render(entity_t camera)
             }
             glUniformMatrix4fv(model_loc, 1, GL_FALSE, glm::value_ptr(model));
             glBindVertexArray(cmd.vao);
-            glDrawElements(GL_TRIANGLES, cmd.num_verts, GL_UNSIGNED_INT, (void*)0);
-            drawelts++;
+            glDrawElements(GL_TRIANGLES, cmd.num_triangles, GL_UNSIGNED_INT, (void*)0);
+            tris += cmd.num_triangles / 3;
         }
     }
 
