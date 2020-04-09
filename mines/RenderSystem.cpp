@@ -4,6 +4,7 @@
 #include "Context.h"
 #include <cstdio>
 #include <fstream>
+#include <glm/glm.hpp>
 #include <glm/mat4x4.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
@@ -278,7 +279,7 @@ void render_system_t::render(entity_t camera)
     ZoneScoped;
 
     {
-        ZoneScoped("render_work");
+        ZoneScoped("ss_process");
         // process RenderMesh changes
         ss = ctx->emgr.get_state_stream<RenderMesh>();
         for (auto& msg : ss->events_back) {
@@ -310,22 +311,30 @@ void render_system_t::render(entity_t camera)
                 break;
             }
         }
+    }
 
-        Camera* cam = &ctx->emgr.get_component<Camera>(camera);
-        glm::mat4 view = glm::lookAt(cam->pos, cam->pos + cam->look(), cam->up);
-        glm::mat4 projection = glm::perspectiveFov(cam->fov, (float)ctx->width, (float)ctx->height, 0.1f, 500.f);
+    int projection_loc, model_loc, view_loc, lightpos_loc, lightcol_loc, viewpos_loc;
+    glm::mat4 view, projection;
+    Camera* cam;
+
+    {
+        ZoneScoped("render_setup");
+
+        cam = &ctx->emgr.get_component<Camera>(camera);
+        view = glm::lookAt(cam->pos, cam->pos + cam->look(), cam->up);
+        projection = glm::perspectiveFov(cam->fov, (float)ctx->width, (float)ctx->height, 0.1f, 500.f);
 
         /////////////////////////////////
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         glUseProgram(shader);
 
         // get uniform locations
-        int projection_loc = glGetUniformLocation(shader, "projection");
-        int model_loc = glGetUniformLocation(shader, "model");
-        int view_loc = glGetUniformLocation(shader, "view");
-        int lightpos_loc = glGetUniformLocation(shader, "lightPos");
-        int lightcol_loc = glGetUniformLocation(shader, "lightColor");
-        int viewpos_loc = glGetUniformLocation(shader, "viewPos");
+        projection_loc = glGetUniformLocation(shader, "projection");
+        model_loc = glGetUniformLocation(shader, "model");
+        view_loc = glGetUniformLocation(shader, "view");
+        lightpos_loc = glGetUniformLocation(shader, "lightPos");
+        lightcol_loc = glGetUniformLocation(shader, "lightColor");
+        viewpos_loc = glGetUniformLocation(shader, "viewPos");
 
         // set uniform values
         glUniformMatrix4fv(projection_loc, 1, GL_FALSE, glm::value_ptr(projection));
@@ -333,6 +342,10 @@ void render_system_t::render(entity_t camera)
         glUniform3f(lightpos_loc, -10.f, 64.f, 32.f);
         glUniform3f(lightcol_loc, 1.f, 1.f, 1.f);
         glUniform3f(viewpos_loc, cam->pos.x, cam->pos.y, cam->pos.z);
+    }
+
+    {
+        ZoneScoped("draw1");
 
         // draw commands
         std::pair<entity_t*, cmd_t*> cmd_arr = cmds.any_pair<cmd_t>();
@@ -350,21 +363,47 @@ void render_system_t::render(entity_t camera)
             glDrawArrays(GL_TRIANGLES, 0, cmd.num_verts);
             tris += cmd.num_verts / 3;
         }
+    }
 
-        // draw indexed commands
+    std::vector<std::tuple<entity_t, indexed_cmd_t, glm::mat4, float>> render_data;
+    {
+        ZoneScoped("pre_draw2");
+
+        // insert render data
         std::pair<entity_t*, indexed_cmd_t*> idx_cmd_arr = indexed_cmds.any_pair<indexed_cmd_t>();
         for (size_t i = 0; i < indexed_cmds.size(); i++) {
             auto& cmd = idx_cmd_arr.second[i];
             entity_t e = idx_cmd_arr.first[i];
             glm::mat4 model = glm::mat4(1.f);
-            IndexedRenderMesh& irm = ctx->emgr.get_component<IndexedRenderMesh>(e);
+            auto& irm = ctx->emgr.get_component<IndexedRenderMesh>(e);
             if (!irm.visible)
                 continue;
-            if (ctx->emgr.has_component<Position>(e)) {
-                Position& pos = ctx->emgr.get_component<Position>(e);
-                model = glm::translate(model, pos.pos);
-            }
-            glUniformMatrix4fv(model_loc, 1, GL_FALSE, glm::value_ptr(model));
+            ////////////////////////////////////////////////////////////////
+            // TODO: actually do frustrum culling right,
+            //       this is waaayy too ad-hoc
+            glm::vec3 botL = ctx->emgr.get_component<Position>(e).pos;
+            glm::vec3 topR = botL + glm::vec3(32.f, 32.f, 32.f);
+            float dist = glm::distance(cam->pos, botL);
+            if (glm::dot(cam->pos - botL, cam->look()) > 0 && glm::dot(cam->pos - topR, cam->look()) > 0)
+                continue;
+            ////////////////////////////////////////////////////////////////
+            model = glm::translate(model, botL);
+            render_data.emplace_back(e, cmd, model, dist);
+        }
+
+        // sort render data by distance
+        static const auto sort_func = [](const auto& a, const auto& b) -> bool {
+            return std::get<3>(a) < std::get<3>(b);
+        };
+        std::sort(render_data.begin(), render_data.end(), sort_func);
+    }
+    {
+        ZoneScoped("draw2");
+
+        // draw render data
+        for (auto& tup : render_data) {
+            auto& cmd = std::get<1>(tup);
+            glUniformMatrix4fv(model_loc, 1, GL_FALSE, glm::value_ptr(std::get<2>(tup)));
             glBindVertexArray(cmd.vao);
             glDrawElements(GL_TRIANGLES, cmd.num_triangles, GL_UNSIGNED_INT, (void*)0);
             tris += cmd.num_triangles / 3;
