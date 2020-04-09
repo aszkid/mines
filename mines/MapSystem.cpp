@@ -22,16 +22,11 @@ static const size_t CHUNK_3 = CHUNK_2 * CHUNK_1;
 #define VEC3_UNPACK(v) v.x, v.y, v.z
 
 map_system_t::map_system_t(context_t* ctx)
-	: ctx(ctx), view_distance(7), seed(0), chunk_coord(0), n_chunks(0)
+	: ctx(ctx), view_distance(5), seed(0), chunk_coord(0), n_chunks(0)
 {}
 
 map_system_t::~map_system_t()
 {}
-
-struct tmp_block_t {
-	glm::vec3 pos;
-	glm::vec3 color;
-};
 
 ////////////////////////////////////////////
 // CUBE VERTEX DATA
@@ -43,24 +38,6 @@ static const glm::vec3 normals[6] = {
 	glm::normalize(glm::vec3(-1.f, 0.f, 0.f)),
 	glm::normalize(glm::vec3(0.f, -1.f, 0.f)),
 	glm::normalize(glm::vec3(0.f, 0.f, -1.f)),
-};
-static const glm::vec3 vertices[8] = {
-	glm::vec3(0.f),
-	glm::vec3(0.f, 0.f, 1.f),
-	glm::vec3(1.f, 0.f, 1.f),
-	glm::vec3(1.f, 0.f, 0.f),
-	glm::vec3(0.f, 1.f, 0.f),
-	glm::vec3(0.f, 1.f, 1.f),
-	glm::vec3(1.f),
-	glm::vec3(1.f, 1.f, 0.f)
-};
-static const glm::vec3 vertex_data[24] = {
-	vertices[0], vertices[1], vertices[2], vertices[3],
-	vertices[4], vertices[5], vertices[6], vertices[7],
-	vertices[0], vertices[1], vertices[5], vertices[4],
-	vertices[3], vertices[2], vertices[6], vertices[7],
-	vertices[1], vertices[2], vertices[6], vertices[5],
-	vertices[0], vertices[3], vertices[7], vertices[4]
 };
 static const glm::vec3 normal_data[24] = {
 	normals[4], normals[4], normals[4], normals[4],
@@ -78,17 +55,6 @@ static const unsigned int indices[36] = {
 	16, 17, 18,  18, 19, 16,	// front
 	20, 21, 22,  22, 23, 20		// back
 };
-static std::array<glm::vec3, 72> gen_packed_cube()
-{
-	std::array<glm::vec3, 72> arr{ glm::vec3(0) };
-	for (size_t i = 0; i < 24; i++) {
-		arr[3 * i] = vertex_data[i];
-		arr[3 * i + 1] = normal_data[i];
-		arr[3 * i + 2] = glm::vec3(0);
-	}
-	return arr;
-}
-static std::array <glm::vec3, 72> packed_vertex_data;
 ////////////////////////////////////////////
 
 struct quad_t {
@@ -96,7 +62,7 @@ struct quad_t {
 };
 
 static thread_local std::bitset<CHUNK_3> greedy_bitset;
-static std::vector<quad_t> blocks_to_mesh_greedy(const int *blocks)
+static std::vector<quad_t> blocks_to_mesh_greedy(const int *blocks, int type)
 {
 	greedy_bitset.reset();
 
@@ -106,7 +72,7 @@ static std::vector<quad_t> blocks_to_mesh_greedy(const int *blocks)
 
 	// initialize bitset
 	for (size_t i = 0; i < CHUNK_3; i++) {
-		greedy_bitset[i] = blocks[i] != 0;
+		greedy_bitset[i] = blocks[i] == type;
 	}
 	
 	///////////////////////////////////////////////////////
@@ -165,45 +131,21 @@ static std::vector<quad_t> blocks_to_mesh_greedy(const int *blocks)
 	return quads;
 }
 
-
-static void generate_chunk_mesh(map_system_t* map, IndexedMesh *mesh, asset_t a, std::vector<tmp_block_t> &blocks)
+static glm::vec3 block_color(const int type)
 {
-	size_t old_num_verts = mesh->num_verts;
-	mesh->num_verts = 24 * blocks.size();
-	mesh->num_indices = 36 * blocks.size();
-
-	// allocate memory if needed
-	const size_t old_chunk_sz = map->ctx->assets.get_chunk_size(a, (uint8_t*)mesh->vertices) / sizeof(IndexedMesh::Vertex);
-	if (mesh->vertices == nullptr || old_chunk_sz < mesh->num_verts) {
-		map->ctx->assets.free_chunk(a, (uint8_t*)mesh->vertices);
-		map->ctx->assets.free_chunk(a, (uint8_t*)mesh->indices);
-		mesh->vertices = map->ctx->assets.allocate_chunk<IndexedMesh::Vertex>(a, mesh->num_verts);
-		mesh->indices = map->ctx->assets.allocate_chunk<unsigned int>(a, mesh->num_indices);
-	}
-
-	for (size_t k = 0; k < blocks.size(); k++) {
-		tmp_block_t& blk = blocks[k];
-		glm::vec3& pos = blk.pos;
-		glm::vec3& color = blk.color;
-
-		// vertex data
-		std::memcpy(&mesh->vertices[24 * k], &packed_vertex_data[0], 72 * sizeof(glm::vec3));
-		for (size_t j = 0; j < 24; j++) {
-			mesh->vertices[24 * k + j].x += pos.x; mesh->vertices[24 * k + j].y += pos.y; mesh->vertices[24 * k + j].z += pos.z;
-			mesh->vertices[24 * k + j].r = color.r; mesh->vertices[24 * k + j].g = color.g; mesh->vertices[24 * k + j].b = color.b;
-		}
-
-		// indices
-		std::memcpy(&mesh->indices[36 * k], indices, 36 * sizeof(unsigned int));
-		for (size_t j = 0; j < 36; j++) {
-			mesh->indices[36 * k + j] += 24 * k;
-		}
+	switch (type) {
+	case chunk_t::GRASS:
+		return glm::vec3(0.45f, 0.74f, 0.45f);
+	case chunk_t::ROCK:
+		return glm::vec3(0.4f);
+	default:
+		return glm::vec3(1.f, 0.f, 0.f);
 	}
 }
 
-
-static void generate_quad_mesh(map_system_t* map, IndexedMesh* mesh, const asset_t a, const std::vector<quad_t>& quads)
+static void generate_quad_mesh(map_system_t* map, const asset_t a, const std::vector<quad_t>& quads, int type)
 {
+	auto mesh = map->ctx->assets.get<IndexedMesh>(a);
 	size_t old_num_verts = mesh->num_verts;
 	mesh->num_verts = 24 * quads.size();
 	mesh->num_indices = 36 * quads.size();
@@ -217,7 +159,8 @@ static void generate_quad_mesh(map_system_t* map, IndexedMesh* mesh, const asset
 		mesh->indices = map->ctx->assets.allocate_chunk<unsigned int>(a, mesh->num_indices);
 	}
 
-	const glm::vec3 color = glm::vec3(0.45f, 0.74f, 0.45f);
+	glm::vec3 color = block_color(type);
+
 	for (size_t k = 0; k < quads.size(); k++) {
 		const quad_t& q = quads[k];
 		const glm::vec3 pos = glm::vec3(q.x, q.y, q.z);
@@ -256,60 +199,46 @@ static void generate_quad_mesh(map_system_t* map, IndexedMesh* mesh, const asset
 }
 
 
-static void generate_chunk(map_system_t *map, asset_t asset, IndexedMesh *mesh, glm::ivec3 coordinate)
+static void generate_chunk(map_system_t *map, chunk_t& chunk, glm::ivec3 coordinate)
 {
 	ZoneScoped;
 
-	uint32_t before, delta;
-	std::vector<tmp_block_t> blocks;
-	blocks.reserve(CHUNK_SIZE * CHUNK_SIZE * CHUNK_SIZE);
-
-	coordinate = (int)CHUNK_SIZE * coordinate;
 	HastyNoise::FloatBuffer texture;
 	{
 		ZoneScoped("noise_gen");
+		coordinate = (int)CHUNK_SIZE * coordinate;
 		texture = map->noise->GetNoiseSet(coordinate.x, coordinate.z, coordinate.y, CHUNK_SIZE, CHUNK_SIZE, CHUNK_SIZE);
 	}
-	glm::uvec3 tex_offset(0);
-	glm::uvec3 tex_sz(CHUNK_SIZE);
-	float* buffer = texture.get();
 
-	int* block_markers = new int[CHUNK_3];
+	float* buffer = texture.get();
+	int* blocks = new int[CHUNK_3];
 
 	for (size_t x = 0; x < CHUNK_SIZE; x++) {
 		for (size_t z = 0; z < CHUNK_SIZE; z++) {
 			for (size_t y = 0; y < CHUNK_SIZE; y++) {
-				const size_t tex_idx = (x + tex_offset.x) * tex_sz.z * tex_sz.y + (z + tex_offset.z) * tex_sz.y + y + tex_offset.y;
-				const float val = buffer[tex_idx];
+				const size_t idx = x * CHUNK_2 + z * CHUNK_1 + y;
+				const float val = buffer[idx];
 				if (val > 0.f && val < .2f) {
-					//chunk.blocks[x][y][z].type = chunk_t::block_t::GRASS;
-					block_markers[x * CHUNK_2 + z * CHUNK_1 + y] = 1;
-					blocks.push_back({ glm::vec3(x, y, z), glm::vec3(0.45f, 0.74f, 0.45f) });
+					blocks[idx] = chunk_t::GRASS;
 				}
 				else if (val > .2f) {
-					//chunk.blocks[x][y][z].type = chunk_t::block_t::ROCK;
-					block_markers[x * CHUNK_2 + z * CHUNK_1 + y] = 2;
-					blocks.push_back({ glm::vec3(x, y, z), glm::vec3(.4f, .4f, .4f) });
+					blocks[idx] = chunk_t::ROCK;
 				}
 				else {
-					block_markers[x * CHUNK_2 + z * CHUNK_1 + y] = 0;
-					//chunk.blocks[x][y][z].type = chunk_t::block_t::AIR;
+					blocks[idx] = chunk_t::AIR;
 				}
 			}
 		}
 	}
 
-	std::vector<quad_t> quads;
 	{
 		ZoneScoped("greedy");
-		quads = blocks_to_mesh_greedy(block_markers);
-		delete[] block_markers;
-	}
-
-	{
-		ZoneScoped("generate_mesh");
-		//generate_chunk_mesh(map, mesh, asset, blocks);
-		generate_quad_mesh(map, mesh, asset, quads);
+		std::vector<quad_t> quads;
+		for (int j = 0; j < chunk_t::AIR; j++) {
+			quads = blocks_to_mesh_greedy(blocks, j);
+			generate_quad_mesh(map, chunk.mesh_assets[j], quads, j);
+		}
+		delete[] blocks;
 	}
 }
 
@@ -347,12 +276,14 @@ static void load_chunks(map_system_t* map, std::vector<glm::ivec3>& to_load)
 
 	// load chunk coordinates, ignore hot chunks
 	static const size_t view_on_flight = (2 * map->view_distance + 1) * (2 * map->view_distance + 1);
-	std::vector<std::pair<glm::ivec3, map_system_t::chunk_t>> for_real;
+	std::vector<std::pair<glm::ivec3, chunk_t>> for_real;
+	std::stringstream ss;
+	static uint32_t base = 0;
 	{
 		ZoneScoped("chunk_prepare");
 		for (int i = 0; i < to_load.size(); i++) {
 			glm::ivec3& chunk = to_load[i];
-			map_system_t::chunk_t ch;
+			chunk_t ch;
 			if (map->chunk_cache.find(chunk) != map->chunk_cache.end())
 				continue;
 			// this is the max cache size we're willing to deal with
@@ -365,16 +296,17 @@ static void load_chunks(map_system_t* map, std::vector<glm::ivec3>& to_load)
 				nh.key() = chunk;
 				map->chunk_cache.insert(std::move(nh));
 			} else {
-				std::stringstream ss;
-				static uint32_t base = 0;
-				ss << "ChunkMesh" << base++;
-				ch.mesh_asset = hash_str(ss.str());
-				map->ctx->emgr.new_entity(&ch.entity, 1);
-				IndexedMesh* mesh = map->ctx->assets.make<IndexedMesh>(ch.mesh_asset);
-				mesh->vertices = nullptr;
-				mesh->indices = nullptr;
-				mesh->num_indices = 0;
-				mesh->num_verts = 0;
+				map->ctx->emgr.new_entity(ch.entities, chunk_t::_COUNT);
+				for (int j = 0; j < chunk_t::_COUNT; j++) {
+					ss.clear();
+					ss << "ChunkMesh" << base++;
+					ch.mesh_assets[j] = hash_str(ss.str());
+					IndexedMesh* mesh = map->ctx->assets.make<IndexedMesh>(ch.mesh_assets[j]);
+					mesh->vertices = nullptr;
+					mesh->indices = nullptr;
+					mesh->num_indices = 0;
+					mesh->num_verts = 0;
+				}
 				map->chunk_cache.insert({ chunk, ch });
 			}
 			for_real.push_back({ chunk, ch });
@@ -396,20 +328,20 @@ static void load_chunks(map_system_t* map, std::vector<glm::ivec3>& to_load)
 	//        which right now has no locking.
 #pragma omp parallel for num_threads(4)
 	for (int i = 0; i < for_real.size(); i++) {
-		const map_system_t::chunk_t& chunk = for_real[i].second;
-		IndexedMesh* mesh = map->ctx->assets.get<IndexedMesh>(chunk.mesh_asset);
-		generate_chunk(map, chunk.mesh_asset, mesh, for_real[i].first);
+		generate_chunk(map, for_real[i].second, for_real[i].first);
 	}
 
 	// insert chunk components and refill cache vector
 	for (int i = 0; i < for_real.size(); i++) {
-		const map_system_t::chunk_t& chunk = for_real[i].second;
-		const glm::ivec3 &chunk_coord = for_real[i].first;
+		const chunk_t& chunk = for_real[i].second;
+		const glm::ivec3& chunk_coord = for_real[i].first;
 		map->chunk_cache_sorted.push_back(chunk_coord);
-		map->ctx->emgr.insert_component<IndexedRenderMesh>(chunk.entity, { chunk.mesh_asset, true, SDL_GetTicks() });
-		map->ctx->emgr.insert_component<Position>(chunk.entity, {
-			(float)CHUNK_SIZE * glm::vec3(chunk_coord)
-		});
+		for (int j = 0; j < chunk_t::_COUNT; j++) {
+			map->ctx->emgr.insert_component<IndexedRenderMesh>(chunk.entities[j], { chunk.mesh_assets[j], true, SDL_GetTicks() });
+			map->ctx->emgr.insert_component<Position>(chunk.entities[j], {
+				(float)CHUNK_SIZE * glm::vec3(chunk_coord)
+			});
+		}
 	}
 }
 
@@ -430,8 +362,6 @@ static std::vector<glm::ivec3> get_chunks_at(map_system_t* map, glm::ivec3& posi
 
 void map_system_t::init(entity_t camera)
 {
-	packed_vertex_data = gen_packed_cube();
-
 	seed = generate_seed();
 	HastyNoise::loadSimd("./");
 	noise = HastyNoise::CreateNoise(seed, HastyNoise::GetFastestSIMD());
@@ -498,12 +428,14 @@ void map_system_t::update(entity_t camera)
 		glm::ivec3 dist = glm::abs(ch.first - chunk_coord);
 		bool visible = !(dist.x > view_distance || dist.y > view_distance || dist.z > view_distance);
 		uint32_t last_update = time;
-		if (ctx->emgr.has_component<IndexedRenderMesh>(ch.second.entity)) {
-			auto& rm = ctx->emgr.get_component<IndexedRenderMesh>(ch.second.entity);
+		if (!ctx->emgr.has_component<IndexedRenderMesh>(ch.second.entities[0]))
+			continue;
+		for (int j = 0; j < chunk_t::_COUNT; j++) {
+			auto& rm = ctx->emgr.get_component<IndexedRenderMesh>(ch.second.entities[j]);
 			last_update = rm.last_update;
 			if (visible == rm.visible)
 				continue;
+			ctx->emgr.insert_component<IndexedRenderMesh>(ch.second.entities[j], { ch.second.mesh_assets[j], visible, last_update });
 		}
-		ctx->emgr.insert_component<IndexedRenderMesh>(ch.second.entity, { ch.second.mesh_asset, visible, last_update });
 	}
 }

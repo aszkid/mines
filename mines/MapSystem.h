@@ -23,11 +23,18 @@ struct ivec3_hash_f {
 	}
 };
 
-struct map_system_t {
-	struct chunk_t {
-		asset_t mesh_asset;
-		entity_t entity;
+struct chunk_t {
+	enum {
+		GRASS = 0,
+		ROCK,
+		AIR,
+		_COUNT
 	};
+	asset_t mesh_assets[_COUNT];
+	entity_t entities[_COUNT];
+};
+
+struct map_system_t {
 
 	map_system_t(context_t* ctx);
 	~map_system_t();

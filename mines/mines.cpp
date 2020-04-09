@@ -35,7 +35,7 @@ int main(int argc, char **argv)
         glm::vec3(0.f, 1.f, 0.f),   // up
         0.f, -90.f, 0.f,            // pitch, yaw, roll
         45.f                        // fov
-        });
+    });
 
     if (render_sys.init() != 0)
         return EXIT_FAILURE;
