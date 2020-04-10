@@ -14,12 +14,13 @@
 #include <Tracy.hpp>
 #include <bitset>
 
-static const int CHUNK_SIZE = 32;
+static const int CHUNK_SIZE = 64;
 static const size_t CHUNK_1 = static_cast<size_t>(CHUNK_SIZE);
 static const size_t CHUNK_2 = CHUNK_1 * CHUNK_1;
 static const size_t CHUNK_3 = CHUNK_2 * CHUNK_1;
 
 #define VEC3_UNPACK(v) v.x, v.y, v.z
+#define VEC3_FMTD "(%d, %d, %d)"
 
 map_system_t::map_system_t(context_t* ctx)
 	: ctx(ctx), view_distance(5), seed(0), chunk_coord(0), n_chunks(0)
@@ -74,7 +75,7 @@ static std::vector<quad_t> blocks_to_mesh_greedy(const int *blocks, int type)
 	for (size_t i = 0; i < CHUNK_3; i++) {
 		greedy_bitset[i] = blocks[i] == type;
 	}
-	
+
 	///////////////////////////////////////////////////////
 	// TODO: should build quads from different corners in
 	//       the chunk and then stick with the best result.
@@ -198,16 +199,29 @@ static void generate_quad_mesh(map_system_t* map, const asset_t a, const std::ve
 	}
 }
 
-
 static void generate_chunk(map_system_t *map, chunk_t& chunk, glm::ivec3 coordinate)
 {
 	ZoneScoped;
 
+	bool is_outside_range = coordinate.y >= 1 || coordinate.y < -1;
+	glm::ivec3 tex_coord = (int)CHUNK_SIZE * coordinate;
+
 	HastyNoise::FloatBuffer texture;
 	{
 		ZoneScoped("noise_gen");
-		coordinate = (int)CHUNK_SIZE * coordinate;
-		texture = map->noise->GetNoiseSet(coordinate.x, coordinate.z, coordinate.y, CHUNK_SIZE, CHUNK_SIZE, CHUNK_SIZE);
+		map->noise->SetNoiseType(HastyNoise::NoiseType::Simplex);
+		map->noise->SetFrequency(0.05f);
+		if (!is_outside_range)
+			texture = map->noise->GetNoiseSet(tex_coord.x, tex_coord.z, tex_coord.y, CHUNK_SIZE, CHUNK_SIZE, CHUNK_SIZE);
+	}
+
+	HastyNoise::FloatBuffer terrain;
+	{
+		ZoneScoped("terrain_gen");
+		map->noise->SetNoiseType(HastyNoise::NoiseType::Simplex);
+		map->noise->SetFrequency(0.0025f);
+		if (!is_outside_range)
+			terrain = map->noise->GetNoiseSet(tex_coord.x, tex_coord.z, 0, CHUNK_SIZE, CHUNK_SIZE, 1);
 	}
 
 	float* buffer = texture.get();
@@ -217,7 +231,8 @@ static void generate_chunk(map_system_t *map, chunk_t& chunk, glm::ivec3 coordin
 		for (size_t z = 0; z < CHUNK_SIZE; z++) {
 			for (size_t y = 0; y < CHUNK_SIZE; y++) {
 				const size_t idx = x * CHUNK_2 + z * CHUNK_1 + y;
-				const float val = buffer[idx];
+
+				/*const float val = buffer[idx];
 				if (val > 0.f && val < .2f) {
 					blocks[idx] = chunk_t::GRASS;
 				}
@@ -226,20 +241,37 @@ static void generate_chunk(map_system_t *map, chunk_t& chunk, glm::ivec3 coordin
 				}
 				else {
 					blocks[idx] = chunk_t::AIR;
+				}*/
+
+				const size_t terrain_idx = x * CHUNK_1 + z;
+				const float test = (float)coordinate.y + (float)y / (float)CHUNK_SIZE;
+
+				if (is_outside_range) {
+					blocks[idx] = test > 0 ? chunk_t::AIR : chunk_t::GRASS;
+					continue;
+				}
+
+				const float elevation = std::pow(terrain.get()[terrain_idx], 1.f);
+				if (test > elevation) {
+					blocks[idx] = chunk_t::AIR;
+				}
+				else {
+					blocks[idx] = chunk_t::GRASS;
 				}
 			}
 		}
 	}
 
 	{
-		ZoneScoped("greedy");
+		ZoneScoped("greedy_mesh");
 		std::vector<quad_t> quads;
 		for (int j = 0; j < chunk_t::AIR; j++) {
 			quads = blocks_to_mesh_greedy(blocks, j);
 			generate_quad_mesh(map, chunk.mesh_assets[j], quads, j);
 		}
-		delete[] blocks;
 	}
+
+	delete[] blocks;
 }
 
 static uint32_t generate_seed()
@@ -254,7 +286,7 @@ static glm::ivec3 get_chunk_pos(glm::vec3 world_pos)
 {
 	glm::ivec3 pos;
 	pos.x = static_cast<int>(std::floor(world_pos.x / static_cast<float>(CHUNK_SIZE)));
-	pos.y = -1;
+	pos.y = static_cast<int>(std::floor(world_pos.y / static_cast<float>(CHUNK_SIZE)));
 	pos.z = static_cast<int>(std::floor(world_pos.z / static_cast<float>(CHUNK_SIZE)));
 	return pos;
 }
@@ -275,7 +307,7 @@ static void load_chunks(map_system_t* map, std::vector<glm::ivec3>& to_load)
 
 
 	// load chunk coordinates, ignore hot chunks
-	static const size_t view_on_flight = (2 * map->view_distance + 1) * (2 * map->view_distance + 1);
+	static const size_t view_on_flight = (2 * map->view_distance + 1) * (2 * map->view_distance + 1) * (2 * map->view_distance + 1);
 	std::vector<std::pair<glm::ivec3, chunk_t>> for_real;
 	std::stringstream ss;
 	static uint32_t base = 0;
@@ -298,6 +330,7 @@ static void load_chunks(map_system_t* map, std::vector<glm::ivec3>& to_load)
 			} else {
 				map->ctx->emgr.new_entity(ch.entities, chunk_t::_COUNT);
 				for (int j = 0; j < chunk_t::_COUNT; j++) {
+					ss.str(std::string());
 					ss.clear();
 					ss << "ChunkMesh" << base++;
 					ch.mesh_assets[j] = hash_str(ss.str());
@@ -326,7 +359,7 @@ static void load_chunks(map_system_t* map, std::vector<glm::ivec3>& to_load)
 	//   other systems to do their work, and joining right before we materialize the frame changes.
 	// TODO2: this is thread unsafe -- we are allocating stuff from the asset manager,
 	//        which right now has no locking.
-#pragma omp parallel for num_threads(4)
+//#pragma omp parallel for num_threads(1)
 	for (int i = 0; i < for_real.size(); i++) {
 		generate_chunk(map, for_real[i].second, for_real[i].first);
 	}
@@ -345,28 +378,13 @@ static void load_chunks(map_system_t* map, std::vector<glm::ivec3>& to_load)
 	}
 }
 
-static std::vector<glm::ivec3> get_chunks_at(map_system_t* map, glm::ivec3& position, int distance_begin, int distance_end, std::vector<glm::ivec3> &offsets, std::vector<glm::ivec3> &masks)
-{
-	std::vector<glm::ivec3> to_load;
-	for (size_t i = 0; i < offsets.size(); i++) {
-		glm::ivec3& offset = offsets[i];
-		glm::ivec3& mask = masks[i];
-		for (int distance = distance_begin; distance <= distance_end; distance++) {
-			for (int j = -distance; j <= distance; j++) {
-				to_load.push_back(distance * offset + j * mask + position);
-			}
-		}
-	}
-	return to_load;
-}
-
 void map_system_t::init(entity_t camera)
 {
+	ZoneScoped;
+
 	seed = generate_seed();
 	HastyNoise::loadSimd("./");
-	noise = HastyNoise::CreateNoise(seed, HastyNoise::GetFastestSIMD());
-	noise->SetNoiseType(HastyNoise::NoiseType::Simplex);
-	noise->SetFrequency(0.05f);
+	noise = HastyNoise::CreateNoise(seed, 3);
 
 	std::printf("[map] seed=%u\n", seed);
 	std::printf("[map] view_distance=%zu\n", view_distance);
@@ -374,49 +392,36 @@ void map_system_t::init(entity_t camera)
 	Camera& cam = ctx->emgr.get_component<Camera>(camera);
 	chunk_coord = get_chunk_pos(cam.pos);
 
-	std::vector<glm::ivec3> offsets = { glm::ivec3(0), glm::ivec3(1, 0, 0), glm::ivec3(0, 0, 1), glm::ivec3(-1, 0, 0), glm::ivec3(0, 0, -1) };
-	std::vector<glm::ivec3> masks = { glm::ivec3(0), glm::ivec3(0, 0, 1), glm::ivec3(1, 0, 0), glm::ivec3(0, 0, 1), glm::ivec3(1, 0, 0) };
-	auto to_load = get_chunks_at(this, chunk_coord, 0, (int)view_distance, offsets, masks);
+	std::vector<glm::ivec3> to_load;
+	int vdist = static_cast<int>(view_distance);
+	for (int i = -vdist; i < vdist; i++) {
+		for (int j = -vdist; j < vdist; j++) {
+			for (int k = -vdist; k < vdist; k++) {
+				to_load.emplace_back(chunk_coord + glm::ivec3(i, j, k));
+			}
+		}
+	}
 	load_chunks(this, to_load);
 }
 
 void map_system_t::update(entity_t camera)
 {
 	Camera& cam = ctx->emgr.get_component<Camera>(camera);
-	glm::ivec3 new_chunk_coord = get_chunk_pos(cam.pos);
-	if (chunk_coord == new_chunk_coord)
+	glm::ivec3 new_chunk_pos = get_chunk_pos(cam.pos);
+	if (chunk_coord == new_chunk_pos)
 		return;
 
-	////////////////////////////////////////////////////
-	// compute coordinates of the chunks we want to load
-	////////////////////////////////////////////////////
-
-	glm::ivec3 diff = new_chunk_coord - chunk_coord;
-	std::vector<glm::ivec3> offsets;
-	std::vector <glm::ivec3> masks;
-	offsets.reserve(2 * view_distance + 1);
-	masks.reserve(2 * view_distance + 1);
-
-	if (diff.x == 1) { // moving +x
-		offsets.insert(offsets.end(), { glm::ivec3(1, 0, 0) });
-		masks.insert(masks.end(), { glm::ivec3(0, 0, 1) });
-	}
-	if (diff.x == -1) { // moving -x
-		offsets.insert(offsets.end(), { glm::ivec3(-1, 0, 0) });
-		masks.insert(masks.end(), { glm::ivec3(0, 0, 1) });
-	}
-	if (diff.z == -1) { // moving -z
-		offsets.insert(offsets.end(), { glm::ivec3(0, 0, -1) });
-		masks.insert(masks.end(), { glm::ivec3(1, 0, 0) });
-	}
-	if (diff.z == 1) { // moving +z
-		offsets.insert(offsets.end(), { glm::ivec3(0, 0, 1) });
-		masks.insert(masks.end(), { glm::ivec3(1, 0, 0) });
+	chunk_coord = new_chunk_pos;
+	std::vector<glm::ivec3> to_load;
+	int vdist = static_cast<int>(view_distance);
+	for (int i = -vdist; i < vdist; i++) {
+		for (int j = -vdist; j < vdist; j++) {
+			for (int k = -vdist; k < vdist; k++) {
+				to_load.emplace_back(glm::ivec3(i, j, k) + chunk_coord);
+			}
+		}
 	}
 
-	// and load them
-	auto to_load = get_chunks_at(this, new_chunk_coord, (int)view_distance, (int)view_distance, offsets, masks);
-	chunk_coord = new_chunk_coord;
 	{
 		ZoneScoped;
 		load_chunks(this, to_load);
@@ -426,16 +431,7 @@ void map_system_t::update(entity_t camera)
 	const uint32_t time = SDL_GetTicks();
 	for (auto& ch : chunk_cache) {
 		glm::ivec3 dist = glm::abs(ch.first - chunk_coord);
-		bool visible = !(dist.x > view_distance || dist.y > view_distance || dist.z > view_distance);
-		uint32_t last_update = time;
-		if (!ctx->emgr.has_component<IndexedRenderMesh>(ch.second.entities[0]))
-			continue;
-		for (int j = 0; j < chunk_t::_COUNT; j++) {
-			auto& rm = ctx->emgr.get_component<IndexedRenderMesh>(ch.second.entities[j]);
-			last_update = rm.last_update;
-			if (visible == rm.visible)
-				continue;
-			ctx->emgr.insert_component<IndexedRenderMesh>(ch.second.entities[j], { ch.second.mesh_assets[j], visible, last_update });
-		}
+		const bool visible = dist.x <= view_distance && dist.y <= view_distance && dist.z <= view_distance;
+		// TODO
 	}
 }

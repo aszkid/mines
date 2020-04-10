@@ -200,7 +200,7 @@ private:
 	{
 		auto it = stores.find(cID);
 		if (it == stores.end()) {
-			it = stores.emplace(cID, packed_array_t<entity_t>(elt_sz, 4096)).first;
+			it = stores.emplace(cID, packed_array_t<entity_t>(elt_sz, 0x4000)).first;
 		}
 		return &it->second;
 	}

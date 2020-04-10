@@ -5,23 +5,12 @@
 #include <cstdint>
 #include <hastyNoise.h>
 #include <unordered_map>
+#define GLM_ENABLE_EXPERIMENTAL
+#include <glm/gtx/hash.hpp>
 #include <glm/vec3.hpp>
+#include <utility>
 
 struct context_t;
-
-struct ivec3_hash_f {
-	template<typename T>
-	size_t operator() (const T& e) const
-	{
-		glm::ivec3 v = static_cast<glm::ivec3>(e);
-		uint64_t hx = v.x;
-		hx <<= 40;
-		uint64_t hy = v.y & 0xffff;
-		uint64_t hz = v.z & 0xffffff;
-		hz <<= 16;
-		return hx ^ hz ^ hy;
-	}
-};
 
 struct chunk_t {
 	enum {
@@ -49,6 +38,6 @@ struct map_system_t {
 	std::unique_ptr<HastyNoise::NoiseSIMD> noise;
 
 	glm::ivec3 chunk_coord;
-	std::unordered_map<glm::ivec3, chunk_t, ivec3_hash_f> chunk_cache;
+	std::unordered_map<glm::ivec3, chunk_t> chunk_cache;
 	std::vector<glm::ivec3> chunk_cache_sorted;
 };

@@ -66,6 +66,7 @@ size_t asset_manager_t::get_chunk_size(const asset_t asset, uint8_t* ptr)
 		if (chunk.ptr == ptr)
 			return chunk.sz;
 	}
+	return 0;
 }
 
 void asset_manager_t::print()

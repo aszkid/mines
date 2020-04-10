@@ -32,7 +32,7 @@ enum STATUS {
 };
 
 render_system_t::render_system_t(context_t* ctx)
-    : ctx(ctx), status(RS_DOWN), cmds(sizeof(cmd_t), 4096), indexed_cmds(sizeof(indexed_cmd_t), 4096), shader(0)
+    : ctx(ctx), status(RS_DOWN), cmds(sizeof(cmd_t), 0x4000), indexed_cmds(sizeof(indexed_cmd_t), 0x4000), shader(0)
 {
 }
 
@@ -155,7 +155,7 @@ int render_system_t::init()
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
-    SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 0);
+    SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
     SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
     SDL_GL_SetAttribute(SDL_GL_MULTISAMPLEBUFFERS, 1);
     SDL_GL_SetAttribute(SDL_GL_MULTISAMPLESAMPLES, 2);
@@ -174,7 +174,7 @@ int render_system_t::init()
         return status;
     }
 
-    if (SDL_GL_SetSwapInterval(0) != 0) {
+    if (SDL_GL_SetSwapInterval(1) != 0) {
         std::printf("SDL_GL_SetSwapInterval error: %s\n", SDL_GetError());
         status = RS_ERR_GL;
         return status;
@@ -263,20 +263,31 @@ static void handle_update_indexedrendermesh(render_system_t* sys, entity_t e)
     IndexedMesh* mesh = sys->ctx->assets.get<IndexedMesh>(rm->indexed_mesh);
     render_system_t::indexed_cmd_t& cmd = sys->indexed_cmds.get<render_system_t::indexed_cmd_t>(e);
 
-    if (cmd.last_update >= rm->last_update)
-        return;
+    /*if (cmd.last_update >= rm->last_update)
+        return;*/
 
-    glBindBuffer(GL_ARRAY_BUFFER, cmd.vbo);
-    glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(IndexedMesh::Vertex) * mesh->num_verts, mesh->vertices);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, cmd.ebo);
-    glBufferSubData(GL_ELEMENT_ARRAY_BUFFER, 0, sizeof(unsigned int) * mesh->num_indices, mesh->indices);
+    // grow buffer
+    if (mesh->num_indices > cmd.num_triangles) {
+        glBindBuffer(GL_ARRAY_BUFFER, cmd.vbo);
+        glBufferData(GL_ARRAY_BUFFER, sizeof(IndexedMesh::Vertex) * mesh->num_verts, mesh->vertices, GL_STATIC_DRAW);
+
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, cmd.ebo);
+        glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(unsigned int) * mesh->num_indices, mesh->indices, GL_STATIC_DRAW);
+
+    } else {
+        glBindBuffer(GL_ARRAY_BUFFER, cmd.vbo);
+        glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(IndexedMesh::Vertex) * mesh->num_verts, mesh->vertices);
+
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, cmd.ebo);
+        glBufferSubData(GL_ELEMENT_ARRAY_BUFFER, 0, sizeof(unsigned int) * mesh->num_indices, mesh->indices);
+    }
+
     cmd.num_triangles = mesh->num_indices;
     cmd.last_update = rm->last_update;
 }
 
 void render_system_t::render(entity_t camera)
 {
-    uint32_t before, delta;
     state_stream_t* ss;
     size_t tris = 0;
     ZoneScoped;
@@ -368,7 +379,7 @@ void render_system_t::render(entity_t camera)
         }
     }
 
-    std::vector<std::tuple<entity_t, indexed_cmd_t, glm::mat4, float>> render_data;
+    std::vector<std::tuple<entity_t, indexed_cmd_t, glm::mat4, float, glm::vec3>> render_data;
     {
         ZoneScoped("pre_draw2");
 
@@ -379,26 +390,34 @@ void render_system_t::render(entity_t camera)
             entity_t e = idx_cmd_arr.first[i];
             glm::mat4 model = glm::mat4(1.f);
             auto& irm = ctx->emgr.get_component<IndexedRenderMesh>(e);
-            if (!irm.visible)
+            /*if (!irm.visible)
                 continue;
+            if (cmd.num_triangles == 0)
+                continue;*/
             ////////////////////////////////////////////////////////////////
             // TODO: actually do frustrum culling right,
             //       this is waaayy too ad-hoc
             glm::vec3 botL = ctx->emgr.get_component<Position>(e).pos;
             glm::vec3 topR = botL + glm::vec3(32.f, 32.f, 32.f);
             float dist = glm::distance(cam->pos, botL);
-            if (glm::dot(cam->pos - botL, cam->look()) > 0 && glm::dot(cam->pos - topR, cam->look()) > 0)
-                continue;
+            /*if (glm::dot(cam->pos - botL, cam->look()) > 0 && glm::dot(cam->pos - topR, cam->look()) > 0)
+                continue;*/
             ////////////////////////////////////////////////////////////////
             model = glm::translate(model, botL);
-            render_data.emplace_back(e, cmd, model, dist);
+            render_data.emplace_back(e, cmd, model, dist, botL);
         }
 
         // sort render data by distance
         static const auto sort_func = [](const auto& a, const auto& b) -> bool {
             return std::get<3>(a) < std::get<3>(b);
         };
-        std::sort(render_data.begin(), render_data.end(), sort_func);
+        static const auto sort_bypos = [](const auto& a, const auto& b) -> bool {
+            glm::vec3 aa = std::get<4>(a);
+            glm::vec3 bb = std::get<4>(b);
+            return aa.x < bb.x || (aa.x == bb.x && aa.y < bb.y) || (aa.x == bb.x && aa.y == bb.y && aa.z < bb.z);
+        };
+        //std::sort(render_data.begin(), render_data.end(), sort_func);
+        std::sort(render_data.begin(), render_data.end(), sort_bypos);
     }
     {
         ZoneScoped("draw2");
