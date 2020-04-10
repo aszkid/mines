@@ -263,8 +263,8 @@ static void handle_update_indexedrendermesh(render_system_t* sys, entity_t e)
     IndexedMesh* mesh = sys->ctx->assets.get<IndexedMesh>(rm->indexed_mesh);
     render_system_t::indexed_cmd_t& cmd = sys->indexed_cmds.get<render_system_t::indexed_cmd_t>(e);
 
-    /*if (cmd.last_update >= rm->last_update)
-        return;*/
+    if (cmd.last_update >= rm->last_update)
+        return;
 
     // grow buffer
     if (mesh->num_indices > cmd.num_triangles) {
@@ -390,18 +390,18 @@ void render_system_t::render(entity_t camera)
             entity_t e = idx_cmd_arr.first[i];
             glm::mat4 model = glm::mat4(1.f);
             auto& irm = ctx->emgr.get_component<IndexedRenderMesh>(e);
-            /*if (!irm.visible)
+            if (!irm.visible)
                 continue;
             if (cmd.num_triangles == 0)
-                continue;*/
+                continue;
             ////////////////////////////////////////////////////////////////
             // TODO: actually do frustrum culling right,
             //       this is waaayy too ad-hoc
             glm::vec3 botL = ctx->emgr.get_component<Position>(e).pos;
             glm::vec3 topR = botL + glm::vec3(32.f, 32.f, 32.f);
             float dist = glm::distance(cam->pos, botL);
-            /*if (glm::dot(cam->pos - botL, cam->look()) > 0 && glm::dot(cam->pos - topR, cam->look()) > 0)
-                continue;*/
+            if (glm::dot(cam->pos - botL, cam->look()) > 0 && glm::dot(cam->pos - topR, cam->look()) > 0)
+                continue;
             ////////////////////////////////////////////////////////////////
             model = glm::translate(model, botL);
             render_data.emplace_back(e, cmd, model, dist, botL);
@@ -411,13 +411,7 @@ void render_system_t::render(entity_t camera)
         static const auto sort_func = [](const auto& a, const auto& b) -> bool {
             return std::get<3>(a) < std::get<3>(b);
         };
-        static const auto sort_bypos = [](const auto& a, const auto& b) -> bool {
-            glm::vec3 aa = std::get<4>(a);
-            glm::vec3 bb = std::get<4>(b);
-            return aa.x < bb.x || (aa.x == bb.x && aa.y < bb.y) || (aa.x == bb.x && aa.y == bb.y && aa.z < bb.z);
-        };
-        //std::sort(render_data.begin(), render_data.end(), sort_func);
-        std::sort(render_data.begin(), render_data.end(), sort_bypos);
+        std::sort(render_data.begin(), render_data.end(), sort_func);
     }
     {
         ZoneScoped("draw2");

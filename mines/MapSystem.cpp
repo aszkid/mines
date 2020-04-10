@@ -428,10 +428,17 @@ void map_system_t::update(entity_t camera)
 	}
 
 	// also, hide chunks that are too far away
-	const uint32_t time = SDL_GetTicks();
 	for (auto& ch : chunk_cache) {
 		glm::ivec3 dist = glm::abs(ch.first - chunk_coord);
 		const bool visible = dist.x <= view_distance && dist.y <= view_distance && dist.z <= view_distance;
-		// TODO
+		const chunk_t& chunk = ch.second;
+		if (!ctx->emgr.has_component<IndexedRenderMesh>(chunk.entities[0]))
+			continue;
+		for (int j = 0; j < chunk_t::_COUNT; j++) {
+			auto& irm = ctx->emgr.get_component<IndexedRenderMesh>(chunk.entities[j]);
+			if (irm.visible == visible)
+				continue;
+			ctx->emgr.insert_component<IndexedRenderMesh>(chunk.entities[j], { irm.indexed_mesh, visible, irm.last_update });
+		}
 	}
 }
