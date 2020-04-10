@@ -307,7 +307,7 @@ static void load_chunks(map_system_t* map, std::vector<glm::ivec3>& to_load)
 
 
 	// load chunk coordinates, ignore hot chunks
-	static const size_t view_on_flight = (2 * map->view_distance + 1) * (2 * map->view_distance + 1) * (2 * map->view_distance + 1);
+	const size_t view_on_flight = (2 * map->view_distance + 1) * (2 * map->view_distance + 1) * (2 * map->view_distance + 1);
 	std::vector<std::pair<glm::ivec3, chunk_t>> for_real;
 	std::stringstream ss;
 	static uint32_t base = 0;
@@ -359,7 +359,9 @@ static void load_chunks(map_system_t* map, std::vector<glm::ivec3>& to_load)
 	//   other systems to do their work, and joining right before we materialize the frame changes.
 	// TODO2: this is thread unsafe -- we are allocating stuff from the asset manager,
 	//        which right now has no locking.
-//#pragma omp parallel for num_threads(1)
+	// ANSWER: this is in fact thread safe --- each thread touches the memory blocks of a given number of assets,
+	//         and they never insert/remove from the outermost map in the asset manager. so it's ok.
+#pragma omp parallel for num_threads(4)
 	for (int i = 0; i < for_real.size(); i++) {
 		generate_chunk(map, for_real[i].second, for_real[i].first);
 	}
@@ -438,7 +440,7 @@ void map_system_t::update(entity_t camera)
 			auto& irm = ctx->emgr.get_component<IndexedRenderMesh>(chunk.entities[j]);
 			if (irm.visible == visible)
 				continue;
-			ctx->emgr.insert_component<IndexedRenderMesh>(chunk.entities[j], { irm.indexed_mesh, visible, irm.last_update });
+			ctx->emgr.insert_component<IndexedRenderMesh>(chunk.entities[j], { irm.indexed_mesh, visible, SDL_GetTicks() });
 		}
 	}
 }

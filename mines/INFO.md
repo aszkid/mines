@@ -4,12 +4,16 @@
 
 [OK] Chunks
 
-[  ] Sort render commands back-to-front (for non-transparent objects) to avoid redraw
+[OK] Sort render commands back-to-front (for non-transparent objects) to avoid redraw
 
-[  ] Collapse contiguous cubes into less geometry
+[OK] Collapse contiguous cubes into less geometry
 
+[OK] Fix weird visual chunk bugs (empty chunks, etc)
 
-/////////////////
+[  ] Make asset manager thread-safe
 
-Note: have found that some visual bugs (empty chunks, etc) are caused by our cache mechanism.
-When disabling cache eviction and chunk recycling, all chunks look good.
+[  ] Write `RenderModel` component (like an `IndexedRenderMesh` but having an array of meshes).
+     This will remove the pain of needing multiple entities per chunk (one for each material mesh).
+     Also, we will then pack the three meshes in a single VBO and appease the driver demons.
+
+[  ] Load config from json/lua/ini files
