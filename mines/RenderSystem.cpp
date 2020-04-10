@@ -219,34 +219,6 @@ static void handle_new_rendermesh(render_system_t* sys, entity_t e)
     sys->cmds.emplace(e, cmd);
 }
 
-static void handle_new_indexedrendermesh(render_system_t* sys, entity_t e)
-{
-    IndexedRenderMesh* rm = &sys->ctx->emgr.get_component<IndexedRenderMesh>(e);
-    IndexedMesh* mesh = sys->ctx->assets.get<IndexedMesh>(rm->indexed_mesh);
-
-    render_system_t::indexed_cmd_t cmd;
-    glGenVertexArrays(1, &cmd.vao);
-    glGenBuffers(1, &cmd.vbo);
-    glGenBuffers(1, &cmd.ebo);
-
-    glBindVertexArray(cmd.vao);
-    glBindBuffer(GL_ARRAY_BUFFER, cmd.vbo);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(IndexedMesh::Vertex) * mesh->num_verts, mesh->vertices, GL_STATIC_DRAW);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, cmd.ebo);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(unsigned int) * mesh->num_indices, mesh->indices, GL_STATIC_DRAW);
-
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(IndexedMesh::Vertex), (void*)0);
-    glEnableVertexAttribArray(1);
-    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(IndexedMesh::Vertex), (void*)offsetof(IndexedMesh::Vertex, IndexedMesh::Vertex::nx));
-    glEnableVertexAttribArray(2);
-    glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, sizeof(IndexedMesh::Vertex), (void*)offsetof(IndexedMesh::Vertex, IndexedMesh::Vertex::r));
-
-    cmd.num_triangles = mesh->num_indices;
-    cmd.last_update = rm->last_update;
-    sys->indexed_cmds.emplace(e, cmd);
-}
-
 static void handle_update_rendermesh(render_system_t* sys, entity_t e)
 {
     // TODO
@@ -266,8 +238,8 @@ static void handle_update_indexedrendermesh(render_system_t* sys, entity_t e)
     if (cmd.last_update >= rm->last_update)
         return;
 
-    // grow buffer
-    if (mesh->num_indices > cmd.num_triangles) {
+    // grow buffer if need be
+    if (mesh->num_indices > cmd.num_indices) {
         glBindBuffer(GL_ARRAY_BUFFER, cmd.vbo);
         glBufferData(GL_ARRAY_BUFFER, sizeof(IndexedMesh::Vertex) * mesh->num_verts, mesh->vertices, GL_STATIC_DRAW);
 
@@ -282,18 +254,52 @@ static void handle_update_indexedrendermesh(render_system_t* sys, entity_t e)
         glBufferSubData(GL_ELEMENT_ARRAY_BUFFER, 0, sizeof(unsigned int) * mesh->num_indices, mesh->indices);
     }
 
-    cmd.num_triangles = mesh->num_indices;
+    cmd.num_indices = mesh->num_indices;
     cmd.last_update = rm->last_update;
+}
+
+static void handle_new_indexedrendermesh(render_system_t* sys, entity_t e)
+{
+    IndexedRenderMesh* rm = &sys->ctx->emgr.get_component<IndexedRenderMesh>(e);
+    IndexedMesh* mesh = sys->ctx->assets.get<IndexedMesh>(rm->indexed_mesh);
+
+    assert(mesh->num_indices == mesh->num_verts);
+
+    render_system_t::indexed_cmd_t cmd;
+
+    // create buffers
+    glGenVertexArrays(1, &cmd.vao);
+    glGenBuffers(1, &cmd.vbo);
+    glGenBuffers(1, &cmd.ebo);
+
+    cmd.last_update = 0;
+    cmd.num_indices = 0;
+    sys->indexed_cmds.emplace(e, cmd);
+
+    // upload data
+    glBindVertexArray(cmd.vao);
+    handle_update_indexedrendermesh(sys, e);
+
+    // describe vertex format
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(IndexedMesh::Vertex), (void*)0);
+    glEnableVertexAttribArray(1);
+    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(IndexedMesh::Vertex), (void*)offsetof(IndexedMesh::Vertex, IndexedMesh::Vertex::nx));
+    glEnableVertexAttribArray(2);
+    glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, sizeof(IndexedMesh::Vertex), (void*)offsetof(IndexedMesh::Vertex, IndexedMesh::Vertex::r));
+
+    // unbind vao -- important! (i believe)
+    glBindVertexArray(0);
 }
 
 void render_system_t::render(entity_t camera)
 {
-    state_stream_t* ss;
-    size_t tris = 0;
     ZoneScoped;
 
     {
         ZoneScoped("ss_process");
+        state_stream_t* ss;
+
         // process RenderMesh changes
         ss = ctx->emgr.get_state_stream<RenderMesh>();
         for (auto& msg : ss->events_back) {
@@ -321,7 +327,7 @@ void render_system_t::render(entity_t camera)
                 handle_update_indexedrendermesh(this, msg.e);
                 break;
             default:
-                // TODO update and delete
+                // TODO delete
                 break;
             }
         }
@@ -375,7 +381,6 @@ void render_system_t::render(entity_t camera)
             glUniformMatrix4fv(model_loc, 1, GL_FALSE, glm::value_ptr(model));
             glBindVertexArray(cmd.vao);
             glDrawArrays(GL_TRIANGLES, 0, cmd.num_verts);
-            tris += cmd.num_verts / 3;
         }
     }
 
@@ -390,9 +395,7 @@ void render_system_t::render(entity_t camera)
             entity_t e = idx_cmd_arr.first[i];
             glm::mat4 model = glm::mat4(1.f);
             auto& irm = ctx->emgr.get_component<IndexedRenderMesh>(e);
-            if (!irm.visible)
-                continue;
-            if (cmd.num_triangles == 0)
+            if (!irm.visible || cmd.num_indices == 0)
                 continue;
             ////////////////////////////////////////////////////////////////
             // TODO: actually do frustrum culling right,
@@ -421,8 +424,7 @@ void render_system_t::render(entity_t camera)
             auto& cmd = std::get<1>(tup);
             glUniformMatrix4fv(model_loc, 1, GL_FALSE, glm::value_ptr(std::get<2>(tup)));
             glBindVertexArray(cmd.vao);
-            glDrawElements(GL_TRIANGLES, cmd.num_triangles, GL_UNSIGNED_INT, (void*)0);
-            tris += cmd.num_triangles / 3;
+            glDrawElements(GL_TRIANGLES, cmd.num_indices, GL_UNSIGNED_INT, (void*)0);
         }
     }
 

@@ -17,3 +17,5 @@
      Also, we will then pack the three meshes in a single VBO and appease the driver demons.
 
 [  ] Load config from json/lua/ini files
+
+[  ] Make render commands also hold underlying buffer size

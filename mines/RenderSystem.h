@@ -17,7 +17,7 @@ struct render_system_t {
 	};
 	struct indexed_cmd_t {
 		GLuint vao, vbo, ebo;
-		size_t num_triangles;
+		size_t num_indices;
 		uint32_t last_update;
 	};
 
