@@ -311,7 +311,6 @@ static void load_chunks(map_system_t* map, std::vector<glm::ivec3>& to_load)
 			// TODO should depend on the view distance, but how exactly?????
 			if (map->chunk_cache_sorted.size() > view_on_flight * 2) {
 				glm::ivec3 target = map->chunk_cache_sorted.back();
-				std::printf("[map] recycling chunk " VEC3_FMTD " to be " VEC3_FMTD "\n", VEC3_UNPACK(target), VEC3_UNPACK(chunk));
 				map->chunk_cache_sorted.pop_back();
 				auto nh = map->chunk_cache.extract(target);
 				ch = nh.mapped();

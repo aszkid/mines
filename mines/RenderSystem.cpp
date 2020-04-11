@@ -248,6 +248,7 @@ void render_system_t::render(entity_t camera)
 
         ss = ctx->emgr.get_state_stream<IndexedRenderMesh>();
         for (auto& msg : ss->events_back) {
+            std::printf("[render] processing an IRM event! deprecated\n");
             IndexedRenderMesh* irm = nullptr;
             cmd_t* cmd = nullptr;
             switch (msg.type) {
@@ -285,7 +286,6 @@ void render_system_t::render(entity_t camera)
             case state_msg_header_t::C_UPDATE:
                 rm = &ctx->emgr.get_component<RenderModel>(msg.e);
                 assert(cmds.find(msg.e) != cmds.end());
-                std::printf("[render] updating render model...\n");
                 for (auto& cmd : cmds[msg.e])
                     handle_update_indexedrendermesh(this, cmd, rm->last_update);
                 break;
