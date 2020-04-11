@@ -16,6 +16,7 @@ struct chunk_t {
 	enum {
 		GRASS = 0,
 		ROCK,
+		WATER,
 		_COUNT,
 		AIR,
 	};

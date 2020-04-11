@@ -140,6 +140,8 @@ static glm::vec3 block_color(const int type)
 		return glm::vec3(0.45f, 0.74f, 0.45f);
 	case chunk_t::ROCK:
 		return glm::vec3(0.4f);
+	case chunk_t::WATER:
+		return glm::vec3(0.69f, 0.8f, 0.95f);
 	default:
 		return glm::vec3(1.f, 0.f, 0.f);
 	}
@@ -241,11 +243,16 @@ static void generate_chunk(map_system_t *map, chunk_t& chunk, glm::ivec3 coordin
 					continue;
 				}
 
-				const float elevation = std::pow(terrain.get()[terrain_idx], 1.f);
+				const float terrain_val = terrain.get()[terrain_idx];
+				const float terrain_sign = terrain_val == 0.f ? 1.f : terrain_val / std::fabs(terrain_val);
+				const float elevation = 1.5f * terrain_sign * std::pow(std::fabs(terrain_val), 1.9f) + 0.2f;// +0.5f;
 				if (test > elevation) {
-					blocks[idx] = chunk_t::AIR;
-				}
-				else {
+					if (test >= 0.f) {
+						blocks[idx] = chunk_t::AIR;
+					} else {
+						blocks[idx] = chunk_t::WATER;
+					}
+				} else {
 					blocks[idx] = chunk_t::GRASS;
 				}
 			}
