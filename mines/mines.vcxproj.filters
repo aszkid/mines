@@ -54,6 +54,9 @@
     <ClCompile Include="..\..\..\..\Desktop\dev\tracy-0.6.3\TracyClient.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="Config.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="EntityManager.h">
@@ -119,6 +122,9 @@
     <ClInclude Include="Asset.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="Config.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <None Include="INFO.md">
@@ -136,5 +142,10 @@
     <None Include="block.frag">
       <Filter>shaders</Filter>
     </None>
+  </ItemGroup>
+  <ItemGroup>
+    <Text Include="config.lua">
+      <Filter>Resource Files</Filter>
+    </Text>
   </ItemGroup>
 </Project>

@@ -168,6 +168,7 @@
     <ClCompile Include="..\..\..\..\Desktop\dev\opengl-3.3-core\src\glad.c" />
     <ClCompile Include="..\..\..\..\Desktop\dev\tracy-0.6.3\TracyClient.cpp" />
     <ClCompile Include="AssetManager.cpp" />
+    <ClCompile Include="Config.cpp" />
     <ClCompile Include="EntityManager.cpp" />
     <ClCompile Include="hash.cpp" />
     <ClCompile Include="MapSystem.cpp" />
@@ -180,6 +181,7 @@
     <ClInclude Include="AssetManager.h" />
     <ClInclude Include="Camera.h" />
     <ClInclude Include="CameraSystem.h" />
+    <ClInclude Include="Config.h" />
     <ClInclude Include="Context.h" />
     <ClInclude Include="Entity.h" />
     <ClInclude Include="EntityManager.h" />
@@ -204,6 +206,9 @@
     <None Include="INFO.md" />
     <None Include="phong.frag" />
     <None Include="phong.vert" />
+  </ItemGroup>
+  <ItemGroup>
+    <Text Include="config.lua" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

@@ -375,13 +375,14 @@ static void load_chunks(map_system_t* map, std::vector<glm::ivec3>& to_load)
 	}
 }
 
-void map_system_t::init(entity_t camera)
+void map_system_t::init(entity_t camera, size_t view_distance_, uint32_t seed_)
 {
 	ZoneScoped;
 
-	seed = generate_seed();
+	seed = seed_ == 0 ? generate_seed() : seed_;
 	HastyNoise::loadSimd("./");
 	noise = HastyNoise::CreateNoise(seed, 3);
+	view_distance = view_distance_;
 
 	std::printf("[map] seed=%u\n", seed);
 	std::printf("[map] view_distance=%zu\n", view_distance);

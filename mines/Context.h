@@ -4,6 +4,7 @@
 
 #include "AssetManager.h"
 #include "EntityManager.h"
+#include "Config.h"
 
 struct context_t {
     SDL_Window* win;
@@ -16,4 +17,6 @@ struct context_t {
     // time last frame was in flight
     uint32_t delta;
     uint32_t mouse_last_mode;
+
+    config_t cfg;
 };
