@@ -219,7 +219,8 @@ static void generate_chunk(map_system_t *map, chunk_t& chunk, glm::ivec3 coordin
 	HastyNoise::FloatBuffer terrain;
 	{
 		ZoneScoped("terrain_gen");
-		map->noise->SetNoiseType(HastyNoise::NoiseType::Simplex);
+		map->noise->SetNoiseType(HastyNoise::NoiseType::SimplexFractal);
+		map->noise->SetFractalOctaves(5);
 		map->noise->SetFrequency(0.0025f);
 		if (!is_outside_range)
 			terrain = map->noise->GetNoiseSet(tex_coord.x, tex_coord.z, 0, CHUNK_SIZE, CHUNK_SIZE, 1);
