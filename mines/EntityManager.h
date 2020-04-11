@@ -100,9 +100,28 @@ public:
 	}
 
 	template<typename C>
+	void insert_component(entity_t e, const uint32_t cID, C& component)
+	{
+		auto ss = get_ss_or_default<C>(cID);
+		auto store = get_store_or_default(cID, sizeof(C));
+		if (store->has(e)) {
+			ss->push_insert<C>(e, component, true);
+		}
+		else {
+			ss->push_insert<C>(e, component, false);
+		}
+	}
+
+	template<typename C>
 	inline void insert_component(entity_t e, C&& component)
 	{
 		insert_component<C>(e, C::id(), std::move(component));
+	}
+
+	template<typename C>
+	inline void insert_component(entity_t e, C& component)
+	{
+		insert_component<C>(e, C::id(), component);
 	}
 
 	template<typename C>

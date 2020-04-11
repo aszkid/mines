@@ -19,3 +19,5 @@
 [  ] Load config from json/lua/ini files
 
 [  ] Make render commands also hold underlying buffer size
+
+[  ] Revisit entity manager API

@@ -1,5 +1,8 @@
 #pragma once
 
+#include <unordered_map>
+#include <vector>
+#include <tuple>
 #include <glad/glad.h>
 #include "Entity.h"
 #include "PackedArray.h"
@@ -12,10 +15,6 @@ struct context_t;
 //////////////////////////////////////////////
 struct render_system_t {
 	struct cmd_t {
-		GLuint vao, vbo;
-		size_t num_verts;
-	};
-	struct indexed_cmd_t {
 		GLuint vao, vbo, ebo;
 		size_t num_indices;
 		uint32_t last_update;
@@ -27,10 +26,8 @@ struct render_system_t {
 	void render(entity_t camera);
 	void teardown();
 
-	packed_array_t<entity_t> cmds;
-	packed_array_t<entity_t> indexed_cmds;
+	std::unordered_map<entity_t, std::vector<cmd_t>, entity_hash_f> cmds;
 	int status;
 	context_t* ctx;
 	GLuint shader;
 };
-

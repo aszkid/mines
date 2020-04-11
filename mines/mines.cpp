@@ -12,7 +12,6 @@
 
 #include "Position.h"
 #include "Mesh.h"
-#include "RenderMesh.h"
 #include "Camera.h"
 
 int main(int argc, char **argv)

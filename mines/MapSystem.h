@@ -16,11 +16,11 @@ struct chunk_t {
 	enum {
 		GRASS = 0,
 		ROCK,
+		_COUNT,
 		AIR,
-		_COUNT
 	};
-	asset_t mesh_assets[_COUNT];
-	entity_t entities[_COUNT];
+	entity_t entity;
+	asset_t meshes[_COUNT];
 };
 
 struct map_system_t {

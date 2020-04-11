@@ -89,9 +89,6 @@
     <ClInclude Include="AssetManager.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="RenderMesh.h">
-      <Filter>Header Files\components</Filter>
-    </ClInclude>
     <ClInclude Include="Mesh.h">
       <Filter>Header Files\assets</Filter>
     </ClInclude>
@@ -114,6 +111,12 @@
       <Filter>Header Files\assets</Filter>
     </ClInclude>
     <ClInclude Include="utils.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="RenderModel.h">
+      <Filter>Header Files\components</Filter>
+    </ClInclude>
+    <ClInclude Include="Asset.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

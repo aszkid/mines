@@ -5,7 +5,7 @@
 #include <sstream>
 #include "Context.h"
 #include "IndexedMesh.h"
-#include "IndexedRenderMesh.h"
+#include "RenderModel.h"
 #include <glm/glm.hpp>
 #include <algorithm>
 #include <array>
@@ -23,7 +23,7 @@ static const size_t CHUNK_3 = CHUNK_2 * CHUNK_1;
 #define VEC3_FMTD "(%d, %d, %d)"
 
 map_system_t::map_system_t(context_t* ctx)
-	: ctx(ctx), view_distance(5), seed(0), chunk_coord(0), n_chunks(0)
+	: ctx(ctx), view_distance(2), seed(0), chunk_coord(0), n_chunks(0)
 {}
 
 map_system_t::~map_system_t()
@@ -150,6 +150,7 @@ static void generate_quad_mesh(map_system_t* map, const asset_t a, const std::ve
 	size_t old_num_verts = mesh->num_verts;
 	mesh->num_verts = 24 * quads.size();
 	mesh->num_indices = 36 * quads.size();
+	std::printf("    setting mesh to %zu vertices (before %zu)\n", 24 * quads.size(), old_num_verts);
 
 	// allocate memory if needed
 	const size_t old_chunk_sz = map->ctx->assets.get_chunk_size(a, (uint8_t*)mesh->vertices) / sizeof(IndexedMesh::Vertex);
@@ -220,6 +221,7 @@ static void generate_chunk(map_system_t *map, chunk_t& chunk, glm::ivec3 coordin
 		ZoneScoped("terrain_gen");
 		map->noise->SetNoiseType(HastyNoise::NoiseType::Simplex);
 		map->noise->SetFrequency(0.0025f);
+		std::printf("    generating terrain texture at (%d, %d)\n", coordinate.x, coordinate.z);
 		if (!is_outside_range)
 			terrain = map->noise->GetNoiseSet(tex_coord.x, tex_coord.z, 0, CHUNK_SIZE, CHUNK_SIZE, 1);
 	}
@@ -265,9 +267,10 @@ static void generate_chunk(map_system_t *map, chunk_t& chunk, glm::ivec3 coordin
 	{
 		ZoneScoped("greedy_mesh");
 		std::vector<quad_t> quads;
-		for (int j = 0; j < chunk_t::AIR; j++) {
+		for (int j = 0; j < chunk_t::_COUNT; j++) {
 			quads = blocks_to_mesh_greedy(blocks, j);
-			generate_quad_mesh(map, chunk.mesh_assets[j], quads, j);
+			std::printf("[map] generating quad mesh for " VEC3_FMTD "\n", VEC3_UNPACK(coordinate));
+			generate_quad_mesh(map, chunk.meshes[j], quads, j);
 		}
 	}
 
@@ -314,7 +317,7 @@ static void load_chunks(map_system_t* map, std::vector<glm::ivec3>& to_load)
 	{
 		ZoneScoped("chunk_prepare");
 		for (int i = 0; i < to_load.size(); i++) {
-			glm::ivec3& chunk = to_load[i];
+			glm::ivec3 chunk = to_load[i];
 			chunk_t ch;
 			if (map->chunk_cache.find(chunk) != map->chunk_cache.end())
 				continue;
@@ -322,19 +325,20 @@ static void load_chunks(map_system_t* map, std::vector<glm::ivec3>& to_load)
 			// TODO should depend on the view distance, but how exactly?????
 			if (map->chunk_cache_sorted.size() > view_on_flight * 2) {
 				glm::ivec3 target = map->chunk_cache_sorted.back();
+				std::printf("[map] recycling chunk " VEC3_FMTD " to be " VEC3_FMTD "\n", VEC3_UNPACK(target), VEC3_UNPACK(chunk));
 				map->chunk_cache_sorted.pop_back();
 				auto nh = map->chunk_cache.extract(target);
 				ch = nh.mapped();
 				nh.key() = chunk;
 				map->chunk_cache.insert(std::move(nh));
 			} else {
-				map->ctx->emgr.new_entity(ch.entities, chunk_t::_COUNT);
+				map->ctx->emgr.new_entity(&ch.entity, 1);
 				for (int j = 0; j < chunk_t::_COUNT; j++) {
 					ss.str(std::string());
 					ss.clear();
 					ss << "ChunkMesh" << base++;
-					ch.mesh_assets[j] = hash_str(ss.str());
-					IndexedMesh* mesh = map->ctx->assets.make<IndexedMesh>(ch.mesh_assets[j]);
+					ch.meshes[j] = hash_str(ss.str());
+					IndexedMesh* mesh = map->ctx->assets.make<IndexedMesh>(ch.meshes[j]);
 					mesh->vertices = nullptr;
 					mesh->indices = nullptr;
 					mesh->num_indices = 0;
@@ -371,12 +375,13 @@ static void load_chunks(map_system_t* map, std::vector<glm::ivec3>& to_load)
 		const chunk_t& chunk = for_real[i].second;
 		const glm::ivec3& chunk_coord = for_real[i].first;
 		map->chunk_cache_sorted.push_back(chunk_coord);
-		for (int j = 0; j < chunk_t::_COUNT; j++) {
-			map->ctx->emgr.insert_component<IndexedRenderMesh>(chunk.entities[j], { chunk.mesh_assets[j], true, SDL_GetTicks() });
-			map->ctx->emgr.insert_component<Position>(chunk.entities[j], {
-				(float)CHUNK_SIZE * glm::vec3(chunk_coord)
-			});
-		}
+		RenderModel model;
+		std::memcpy(model.meshes, chunk.meshes, chunk_t::_COUNT * sizeof(asset_t));
+		model.num_meshes = chunk_t::_COUNT;
+		model.last_update = SDL_GetTicks();
+		model.visible = true;
+		map->ctx->emgr.insert_component<RenderModel>(chunk.entity, model);
+		map->ctx->emgr.insert_component<Position>(chunk.entity, { (float)CHUNK_SIZE * glm::vec3(chunk_coord) });
 	}
 }
 
@@ -430,17 +435,24 @@ void map_system_t::update(entity_t camera)
 	}
 
 	// also, hide chunks that are too far away
-	for (auto& ch : chunk_cache) {
+	/*for (auto& ch : chunk_cache) {
 		glm::ivec3 dist = glm::abs(ch.first - chunk_coord);
 		const bool visible = dist.x <= view_distance && dist.y <= view_distance && dist.z <= view_distance;
 		const chunk_t& chunk = ch.second;
-		if (!ctx->emgr.has_component<IndexedRenderMesh>(chunk.entities[0]))
+
+		if (!ctx->emgr.has_component<RenderModel>(chunk.entity))
 			continue;
-		for (int j = 0; j < chunk_t::_COUNT; j++) {
-			auto& irm = ctx->emgr.get_component<IndexedRenderMesh>(chunk.entities[j]);
-			if (irm.visible == visible)
-				continue;
-			ctx->emgr.insert_component<IndexedRenderMesh>(chunk.entities[j], { irm.indexed_mesh, visible, SDL_GetTicks() });
-		}
-	}
+
+		auto& rm = ctx->emgr.get_component<RenderModel>(chunk.entity);
+		if (rm.visible == visible)
+			continue;
+
+		RenderModel model;
+		std::memcpy(model.meshes, chunk.meshes, chunk_t::_COUNT * sizeof(asset_t));
+		model.num_meshes = chunk_t::_COUNT;
+		model.last_update = SDL_GetTicks();
+		model.visible = visible;
+
+		ctx->emgr.insert_component<RenderModel>(chunk.entity, model);
+	}*/
 }

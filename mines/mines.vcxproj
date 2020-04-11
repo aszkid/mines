@@ -176,6 +176,7 @@
     <ClCompile Include="RenderSystem.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="Asset.h" />
     <ClInclude Include="AssetManager.h" />
     <ClInclude Include="Camera.h" />
     <ClInclude Include="CameraSystem.h" />
@@ -190,7 +191,7 @@
     <ClInclude Include="Mesh.h" />
     <ClInclude Include="PackedArray.h" />
     <ClInclude Include="Position.h" />
-    <ClInclude Include="RenderMesh.h" />
+    <ClInclude Include="RenderModel.h" />
     <ClInclude Include="RenderSystem.h" />
     <ClInclude Include="resource.h" />
     <ClInclude Include="Triangle.h" />

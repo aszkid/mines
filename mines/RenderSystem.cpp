@@ -13,10 +13,10 @@
 #include <Tracy.hpp>
 
 // components
-#include "RenderMesh.h"
 #include "IndexedRenderMesh.h"
 #include "Camera.h"
 #include "Position.h"
+#include "RenderModel.h"
 
 // assets
 #include "Mesh.h"
@@ -32,7 +32,7 @@ enum STATUS {
 };
 
 render_system_t::render_system_t(context_t* ctx)
-    : ctx(ctx), status(RS_DOWN), cmds(sizeof(cmd_t), 0x4000), indexed_cmds(sizeof(indexed_cmd_t), 0x4000), shader(0)
+    : ctx(ctx), status(RS_DOWN), shader(0)
 {
 }
 
@@ -40,19 +40,12 @@ static void cleanup(render_system_t *sys)
 {
     glDeleteProgram(sys->shader);
 
-    render_system_t::cmd_t* cmds = sys->cmds.any<render_system_t::cmd_t>();
-    for (size_t i = 0; i < sys->cmds.size(); i++) {
-        auto& cmd = cmds[i];
-        glDeleteBuffers(1, &cmd.vbo);
-        glDeleteVertexArrays(1, &cmd.vao);
-    }
-
-    render_system_t::indexed_cmd_t* idx_cmds = sys->indexed_cmds.any<render_system_t::indexed_cmd_t>();
-    for (size_t i = 0; i < sys->indexed_cmds.size(); i++) {
-        auto& cmd = idx_cmds[i];
-        glDeleteBuffers(1, &cmd.vbo);
-        glDeleteBuffers(1, &cmd.ebo);
-        glDeleteVertexArrays(1, &cmd.vao);
+    for (auto& pair : sys->cmds) {
+        for (auto& cmd : pair.second) {
+            glDeleteBuffers(1, &cmd.vbo);
+            glDeleteBuffers(1, &cmd.ebo);
+            glDeleteVertexArrays(1, &cmd.vao);
+        }
     }
 }
 
@@ -195,47 +188,9 @@ int render_system_t::init()
     return status;
 }
 
-static void handle_new_rendermesh(render_system_t* sys, entity_t e)
+static void handle_update_indexedrendermesh(render_system_t* sys, render_system_t::cmd_t &cmd, IndexedMesh* mesh, uint32_t last_update)
 {
-    RenderMesh* rm = &sys->ctx->emgr.get_component<RenderMesh>(e);
-    Mesh* mesh = sys->ctx->assets.get<Mesh>(rm->mesh);
-
-    render_system_t::cmd_t cmd;
-    glGenVertexArrays(1, &cmd.vao);
-    glGenBuffers(1, &cmd.vbo);
-
-    glBindVertexArray(cmd.vao);
-    glBindBuffer(GL_ARRAY_BUFFER, cmd.vbo);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(Mesh::Vertex) * mesh->num_verts, mesh->vertices, GL_STATIC_DRAW);
-
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Mesh::Vertex), (void*)0);
-    glEnableVertexAttribArray(1);
-    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(Mesh::Vertex), (void*)offsetof(Mesh::Vertex, Mesh::Vertex::nx));
-    glEnableVertexAttribArray(2);
-    glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, sizeof(Mesh::Vertex), (void*)offsetof(Mesh::Vertex, Mesh::Vertex::r));
-
-    cmd.num_verts = mesh->num_verts;
-    sys->cmds.emplace(e, cmd);
-}
-
-static void handle_update_rendermesh(render_system_t* sys, entity_t e)
-{
-    // TODO
-}
-
-static void handle_delete_rendermesh(render_system_t* sys, entity_t e)
-{
-    // TODO
-}
-
-static void handle_update_indexedrendermesh(render_system_t* sys, entity_t e)
-{
-    IndexedRenderMesh* rm = &sys->ctx->emgr.get_component<IndexedRenderMesh>(e);
-    IndexedMesh* mesh = sys->ctx->assets.get<IndexedMesh>(rm->indexed_mesh);
-    render_system_t::indexed_cmd_t& cmd = sys->indexed_cmds.get<render_system_t::indexed_cmd_t>(e);
-
-    if (cmd.last_update >= rm->last_update)
+    if (cmd.last_update >= last_update)
         return;
 
     // grow buffer if need be
@@ -255,30 +210,23 @@ static void handle_update_indexedrendermesh(render_system_t* sys, entity_t e)
     }
 
     cmd.num_indices = mesh->num_indices;
-    cmd.last_update = rm->last_update;
+    cmd.last_update = last_update;
 }
 
-static void handle_new_indexedrendermesh(render_system_t* sys, entity_t e)
+static void handle_new_indexedrendermesh(render_system_t* sys, render_system_t::cmd_t& cmd, IndexedMesh* mesh, uint32_t last_update)
 {
-    IndexedRenderMesh* rm = &sys->ctx->emgr.get_component<IndexedRenderMesh>(e);
-    IndexedMesh* mesh = sys->ctx->assets.get<IndexedMesh>(rm->indexed_mesh);
-
-    assert(mesh->num_indices == mesh->num_verts);
-
-    render_system_t::indexed_cmd_t cmd;
-
     // create buffers
     glGenVertexArrays(1, &cmd.vao);
     glGenBuffers(1, &cmd.vbo);
     glGenBuffers(1, &cmd.ebo);
 
+    // store command
     cmd.last_update = 0;
     cmd.num_indices = 0;
-    sys->indexed_cmds.emplace(e, cmd);
 
     // upload data
     glBindVertexArray(cmd.vao);
-    handle_update_indexedrendermesh(sys, e);
+    handle_update_indexedrendermesh(sys, cmd, mesh, last_update);
 
     // describe vertex format
     glEnableVertexAttribArray(0);
@@ -300,31 +248,48 @@ void render_system_t::render(entity_t camera)
         ZoneScoped("ss_process");
         state_stream_t* ss;
 
-        // process RenderMesh changes
-        ss = ctx->emgr.get_state_stream<RenderMesh>();
+        ss = ctx->emgr.get_state_stream<IndexedRenderMesh>();
         for (auto& msg : ss->events_back) {
+            IndexedRenderMesh* irm = nullptr;
+            cmd_t* cmd = nullptr;
             switch (msg.type) {
             case state_msg_header_t::C_NEW:
-                handle_new_rendermesh(this, msg.e);
+                irm = &ctx->emgr.get_component<IndexedRenderMesh>(msg.e);
+                if (cmds.find(msg.e) == cmds.end())
+                    cmds.insert({ msg.e, {} });
+                cmds[msg.e].push_back({});
+                handle_new_indexedrendermesh(this, cmds[msg.e].back(), ctx->assets.get<IndexedMesh>(irm->indexed_mesh), irm->last_update);
                 break;
             case state_msg_header_t::C_UPDATE:
-                handle_update_rendermesh(this, msg.e);
+                irm = &ctx->emgr.get_component<IndexedRenderMesh>(msg.e);
+                for (auto& cmd : cmds[msg.e])
+                    handle_update_indexedrendermesh(this, cmd, ctx->assets.get<IndexedMesh>(irm->indexed_mesh), irm->last_update);
                 break;
-            case state_msg_header_t::C_DELETE:
-                handle_delete_rendermesh(this, msg.e);
+            default:
+                // TODO delete
                 break;
             }
         }
-
-        // process IndexedRenderMesh changes
-        ss = ctx->emgr.get_state_stream<IndexedRenderMesh>();
+        
+        ss = ctx->emgr.get_state_stream<RenderModel>();
         for (auto& msg : ss->events_back) {
+            RenderModel* rm = nullptr;
             switch (msg.type) {
             case state_msg_header_t::C_NEW:
-                handle_new_indexedrendermesh(this, msg.e);
+                rm = &ctx->emgr.get_component<RenderModel>(msg.e);
+                if (cmds.find(msg.e) == cmds.end())
+                    cmds.insert({ msg.e, {} });
+                for (unsigned i = 0; i < rm->num_meshes; i++) {
+                    cmds[msg.e].push_back({});
+                    handle_new_indexedrendermesh(this, cmds[msg.e].back(), ctx->assets.get<IndexedMesh>(rm->meshes[i]), rm->last_update);
+                }
                 break;
             case state_msg_header_t::C_UPDATE:
-                handle_update_indexedrendermesh(this, msg.e);
+                rm = &ctx->emgr.get_component<RenderModel>(msg.e);
+                assert(cmds.find(msg.e) != cmds.end());
+                for (unsigned i = 0; i < rm->num_meshes; i++) {
+                    handle_update_indexedrendermesh(this, cmds[msg.e].back(), ctx->assets.get<IndexedMesh>(rm->meshes[i]), rm->last_update);
+                }
                 break;
             default:
                 // TODO delete
@@ -364,38 +329,15 @@ void render_system_t::render(entity_t camera)
         glUniform3f(viewpos_loc, cam->pos.x, cam->pos.y, cam->pos.z);
     }
 
-    {
-        ZoneScoped("draw1");
-
-        // draw commands
-        std::pair<entity_t*, cmd_t*> cmd_arr = cmds.any_pair<cmd_t>();
-        for (size_t i = 0; i < cmds.size(); i++) {
-            auto& cmd = cmd_arr.second[i];
-            entity_t e = cmd_arr.first[i];
-            glm::mat4 model = glm::mat4(1.f);
-            if (ctx->emgr.has_component<Position>(e)) {
-                Position& pos = ctx->emgr.get_component<Position>(e);
-                model = glm::translate(model, pos.pos);
-            }
-            RenderMesh& rm = ctx->emgr.get_component<RenderMesh>(e);
-            glUniformMatrix4fv(model_loc, 1, GL_FALSE, glm::value_ptr(model));
-            glBindVertexArray(cmd.vao);
-            glDrawArrays(GL_TRIANGLES, 0, cmd.num_verts);
-        }
-    }
-
-    std::vector<std::tuple<entity_t, indexed_cmd_t, glm::mat4, float, glm::vec3>> render_data;
+    std::vector<std::tuple<entity_t, cmd_t, glm::mat4, float, glm::vec3>> render_data;
     {
         ZoneScoped("pre_draw2");
 
         // insert render data
-        std::pair<entity_t*, indexed_cmd_t*> idx_cmd_arr = indexed_cmds.any_pair<indexed_cmd_t>();
-        for (size_t i = 0; i < indexed_cmds.size(); i++) {
-            auto& cmd = idx_cmd_arr.second[i];
-            entity_t e = idx_cmd_arr.first[i];
-            glm::mat4 model = glm::mat4(1.f);
-            auto& irm = ctx->emgr.get_component<IndexedRenderMesh>(e);
-            if (!irm.visible || cmd.num_indices == 0)
+        for (auto& pair : cmds) {
+            entity_t e = pair.first;
+            auto& rm = ctx->emgr.get_component<RenderModel>(e);
+            if (!rm.visible || rm.num_meshes == 0)
                 continue;
             ////////////////////////////////////////////////////////////////
             // TODO: actually do frustrum culling right,
@@ -406,8 +348,12 @@ void render_system_t::render(entity_t camera)
             if (glm::dot(cam->pos - botL, cam->look()) > 0 && glm::dot(cam->pos - topR, cam->look()) > 0)
                 continue;
             ////////////////////////////////////////////////////////////////
-            model = glm::translate(model, botL);
-            render_data.emplace_back(e, cmd, model, dist, botL);
+            glm::mat4 model = glm::translate(glm::mat4(1.f), botL);
+            for (auto& cmd : pair.second) {
+                if (cmd.num_indices == 0)
+                    continue;
+                render_data.emplace_back(e, cmd, model, dist, botL);
+            }
         }
 
         // sort render data by distance
