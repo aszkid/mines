@@ -197,16 +197,16 @@ static void handle_update_indexedrendermesh(render_system_t* sys, render_system_
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, cmd.ebo);
 
     // grow buffer if need be
-    if (cmd.rm->num_indices > cmd.num_indices) {
-        glBufferData(GL_ARRAY_BUFFER, sizeof(IndexedMesh::Vertex) * cmd.rm->num_verts, cmd.rm->vertices, GL_STATIC_DRAW);
-        glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(unsigned int) * cmd.rm->num_indices, cmd.rm->indices, GL_STATIC_DRAW);
+    if (cmd.mesh->num_indices > cmd.num_indices) {
+        glBufferData(GL_ARRAY_BUFFER, sizeof(IndexedMesh::Vertex) * cmd.mesh->num_verts, cmd.mesh->vertices, GL_STATIC_DRAW);
+        glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(unsigned int) * cmd.mesh->num_indices, cmd.mesh->indices, GL_STATIC_DRAW);
 
     } else {
-        glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(IndexedMesh::Vertex) * cmd.rm->num_verts, cmd.rm->vertices);
-        glBufferSubData(GL_ELEMENT_ARRAY_BUFFER, 0, sizeof(unsigned int) * cmd.rm->num_indices, cmd.rm->indices);
+        glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(IndexedMesh::Vertex) * cmd.mesh->num_verts, cmd.mesh->vertices);
+        glBufferSubData(GL_ELEMENT_ARRAY_BUFFER, 0, sizeof(unsigned int) * cmd.mesh->num_indices, cmd.mesh->indices);
     }
 
-    cmd.num_indices = cmd.rm->num_indices;
+    cmd.num_indices = cmd.mesh->num_indices;
     cmd.last_update = last_update;
 }
 
@@ -220,7 +220,7 @@ static void handle_new_indexedrendermesh(render_system_t* sys, render_system_t::
     // store command
     cmd.last_update = 0;
     cmd.num_indices = 0;
-    cmd.rm = mesh;
+    cmd.mesh = mesh;
 
     // upload data
     glBindVertexArray(cmd.vao);
@@ -248,7 +248,6 @@ void render_system_t::render(entity_t camera)
 
         ss = ctx->emgr.get_state_stream<IndexedRenderMesh>();
         for (auto& msg : ss->events_back) {
-            std::printf("[render] processing an IRM event! deprecated\n");
             IndexedRenderMesh* irm = nullptr;
             cmd_t* cmd = nullptr;
             switch (msg.type) {
@@ -369,6 +368,7 @@ void render_system_t::render(entity_t camera)
             glUniformMatrix4fv(model_loc, 1, GL_FALSE, glm::value_ptr(std::get<2>(tup)));
             glBindVertexArray(cmd.vao);
             glDrawElements(GL_TRIANGLES, cmd.num_indices, GL_UNSIGNED_INT, (void*)0);
+            glBindVertexArray(0);
         }
     }
 

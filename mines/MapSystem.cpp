@@ -23,7 +23,7 @@ static const size_t CHUNK_3 = CHUNK_2 * CHUNK_1;
 #define VEC3_FMTD "(%d, %d, %d)"
 
 map_system_t::map_system_t(context_t* ctx)
-	: ctx(ctx), view_distance(2), seed(0), chunk_coord(0), n_chunks(0)
+	: ctx(ctx), view_distance(5), seed(0), chunk_coord(0), n_chunks(0)
 {}
 
 map_system_t::~map_system_t()
@@ -347,7 +347,7 @@ static void load_chunks(map_system_t* map, std::vector<glm::ivec3>& to_load)
 	//        which right now has no locking.
 	// ANSWER: this is in fact thread safe --- each thread touches the memory blocks of a given number of assets,
 	//         and they never insert/remove from the outermost map in the asset manager. so it's ok.
-//#pragma omp parallel for num_threads(4)
+#pragma omp parallel for num_threads(4)
 	for (int i = 0; i < for_real.size(); i++) {
 		generate_chunk(map, for_real[i].second, for_real[i].first);
 	}
@@ -417,14 +417,13 @@ void map_system_t::update(entity_t camera)
 	}
 
 	// also, hide chunks that are too far away
-	/*for (auto& ch : chunk_cache) {
-		glm::ivec3 dist = glm::abs(ch.first - chunk_coord);
-		const bool visible = dist.x <= view_distance && dist.y <= view_distance && dist.z <= view_distance;
+	for (auto& ch : chunk_cache) {
 		const chunk_t& chunk = ch.second;
-
 		if (!ctx->emgr.has_component<RenderModel>(chunk.entity))
 			continue;
 
+		glm::ivec3 dist = glm::abs(ch.first - chunk_coord);
+		const bool visible = dist.x <= view_distance && dist.y <= view_distance && dist.z <= view_distance;
 		auto& rm = ctx->emgr.get_component<RenderModel>(chunk.entity);
 		if (rm.visible == visible)
 			continue;
@@ -436,5 +435,5 @@ void map_system_t::update(entity_t camera)
 		model.visible = visible;
 
 		ctx->emgr.insert_component<RenderModel>(chunk.entity, model);
-	}*/
+	}
 }

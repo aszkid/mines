@@ -19,7 +19,7 @@ struct render_system_t {
 		GLuint vao, vbo, ebo;
 		size_t num_indices;
 		uint32_t last_update;
-		IndexedMesh* rm;
+		IndexedMesh* mesh;
 	};
 
 	render_system_t(context_t* ctx);
