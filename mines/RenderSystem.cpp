@@ -188,7 +188,7 @@ int render_system_t::init()
     return status;
 }
 
-static void handle_update_indexedrendermesh(render_system_t* sys, render_system_t::cmd_t &cmd, uint32_t last_update)
+static void handle_update_indexedrendermesh(render_system_t* sys, render_system_t::cmd_t &cmd, uint32_t last_update, bool unbind = true)
 {
     if (cmd.last_update >= last_update)
         return;
@@ -204,6 +204,11 @@ static void handle_update_indexedrendermesh(render_system_t* sys, render_system_
     } else {
         glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(IndexedMesh::Vertex) * cmd.mesh->num_verts, cmd.mesh->vertices);
         glBufferSubData(GL_ELEMENT_ARRAY_BUFFER, 0, sizeof(unsigned int) * cmd.mesh->num_indices, cmd.mesh->indices);
+    }
+
+    if (unbind) {
+        glBindBuffer(GL_ARRAY_BUFFER, 0);
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
     }
 
     cmd.num_indices = cmd.mesh->num_indices;
@@ -224,7 +229,7 @@ static void handle_new_indexedrendermesh(render_system_t* sys, render_system_t::
 
     // upload data
     glBindVertexArray(cmd.vao);
-    handle_update_indexedrendermesh(sys, cmd, last_update);
+    handle_update_indexedrendermesh(sys, cmd, last_update, false);
 
     // describe vertex format
     glEnableVertexAttribArray(0);
@@ -234,8 +239,10 @@ static void handle_new_indexedrendermesh(render_system_t* sys, render_system_t::
     glEnableVertexAttribArray(2);
     glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, sizeof(IndexedMesh::Vertex), (void*)offsetof(IndexedMesh::Vertex, IndexedMesh::Vertex::r));
 
-    // unbind vao -- important! (i believe)
+    // unbind buffers
     glBindVertexArray(0);
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 }
 
 void render_system_t::render(entity_t camera)

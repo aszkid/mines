@@ -12,7 +12,7 @@
 
 [  ] Make asset manager thread-safe
 
-[  ] Write `RenderModel` component (like an `IndexedRenderMesh` but having an array of meshes).
+[OK] Write `RenderModel` component (like an `IndexedRenderMesh` but having an array of meshes).
      This will remove the pain of needing multiple entities per chunk (one for each material mesh).
      Also, we will then pack the three meshes in a single VBO and appease the driver demons.
 
