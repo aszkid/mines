@@ -8,6 +8,7 @@
 #include "PackedArray.h"
 
 struct context_t;
+struct IndexedMesh;
 
 //////////////////////////////////////////////
 // TODO: consider using the pimpl idiom
@@ -18,6 +19,7 @@ struct render_system_t {
 		GLuint vao, vbo, ebo;
 		size_t num_indices;
 		uint32_t last_update;
+		IndexedMesh* rm;
 	};
 
 	render_system_t(context_t* ctx);

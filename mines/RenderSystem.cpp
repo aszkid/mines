@@ -188,28 +188,25 @@ int render_system_t::init()
     return status;
 }
 
-static void handle_update_indexedrendermesh(render_system_t* sys, render_system_t::cmd_t &cmd, IndexedMesh* mesh, uint32_t last_update)
+static void handle_update_indexedrendermesh(render_system_t* sys, render_system_t::cmd_t &cmd, uint32_t last_update)
 {
     if (cmd.last_update >= last_update)
         return;
 
-    // grow buffer if need be
-    if (mesh->num_indices > cmd.num_indices) {
-        glBindBuffer(GL_ARRAY_BUFFER, cmd.vbo);
-        glBufferData(GL_ARRAY_BUFFER, sizeof(IndexedMesh::Vertex) * mesh->num_verts, mesh->vertices, GL_STATIC_DRAW);
+    glBindBuffer(GL_ARRAY_BUFFER, cmd.vbo);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, cmd.ebo);
 
-        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, cmd.ebo);
-        glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(unsigned int) * mesh->num_indices, mesh->indices, GL_STATIC_DRAW);
+    // grow buffer if need be
+    if (cmd.rm->num_indices > cmd.num_indices) {
+        glBufferData(GL_ARRAY_BUFFER, sizeof(IndexedMesh::Vertex) * cmd.rm->num_verts, cmd.rm->vertices, GL_STATIC_DRAW);
+        glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(unsigned int) * cmd.rm->num_indices, cmd.rm->indices, GL_STATIC_DRAW);
 
     } else {
-        glBindBuffer(GL_ARRAY_BUFFER, cmd.vbo);
-        glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(IndexedMesh::Vertex) * mesh->num_verts, mesh->vertices);
-
-        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, cmd.ebo);
-        glBufferSubData(GL_ELEMENT_ARRAY_BUFFER, 0, sizeof(unsigned int) * mesh->num_indices, mesh->indices);
+        glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(IndexedMesh::Vertex) * cmd.rm->num_verts, cmd.rm->vertices);
+        glBufferSubData(GL_ELEMENT_ARRAY_BUFFER, 0, sizeof(unsigned int) * cmd.rm->num_indices, cmd.rm->indices);
     }
 
-    cmd.num_indices = mesh->num_indices;
+    cmd.num_indices = cmd.rm->num_indices;
     cmd.last_update = last_update;
 }
 
@@ -223,10 +220,11 @@ static void handle_new_indexedrendermesh(render_system_t* sys, render_system_t::
     // store command
     cmd.last_update = 0;
     cmd.num_indices = 0;
+    cmd.rm = mesh;
 
     // upload data
     glBindVertexArray(cmd.vao);
-    handle_update_indexedrendermesh(sys, cmd, mesh, last_update);
+    handle_update_indexedrendermesh(sys, cmd, last_update);
 
     // describe vertex format
     glEnableVertexAttribArray(0);
@@ -263,7 +261,7 @@ void render_system_t::render(entity_t camera)
             case state_msg_header_t::C_UPDATE:
                 irm = &ctx->emgr.get_component<IndexedRenderMesh>(msg.e);
                 for (auto& cmd : cmds[msg.e])
-                    handle_update_indexedrendermesh(this, cmd, ctx->assets.get<IndexedMesh>(irm->indexed_mesh), irm->last_update);
+                    handle_update_indexedrendermesh(this, cmd, irm->last_update);
                 break;
             default:
                 // TODO delete
@@ -287,9 +285,9 @@ void render_system_t::render(entity_t camera)
             case state_msg_header_t::C_UPDATE:
                 rm = &ctx->emgr.get_component<RenderModel>(msg.e);
                 assert(cmds.find(msg.e) != cmds.end());
-                for (unsigned i = 0; i < rm->num_meshes; i++) {
-                    handle_update_indexedrendermesh(this, cmds[msg.e].back(), ctx->assets.get<IndexedMesh>(rm->meshes[i]), rm->last_update);
-                }
+                std::printf("[render] updating render model...\n");
+                for (auto& cmd : cmds[msg.e])
+                    handle_update_indexedrendermesh(this, cmd, rm->last_update);
                 break;
             default:
                 // TODO delete

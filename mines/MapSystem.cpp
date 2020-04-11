@@ -62,12 +62,13 @@ struct quad_t {
 	unsigned x, y, z, w, h, d;
 };
 
-static thread_local std::bitset<CHUNK_3> greedy_bitset;
+//static thread_local std::bitset<CHUNK_3> greedy_bitset;
 static std::vector<quad_t> blocks_to_mesh_greedy(const int *blocks, int type)
 {
+	std::bitset<CHUNK_3> greedy_bitset;
 	greedy_bitset.reset();
 
-	auto bit_at = [](size_t x, size_t y, size_t z) {
+	auto bit_at = [&greedy_bitset](size_t x, size_t y, size_t z) {
 		return greedy_bitset[CHUNK_2 * x + CHUNK_1 * z + y];
 	};
 
@@ -150,7 +151,6 @@ static void generate_quad_mesh(map_system_t* map, const asset_t a, const std::ve
 	size_t old_num_verts = mesh->num_verts;
 	mesh->num_verts = 24 * quads.size();
 	mesh->num_indices = 36 * quads.size();
-	std::printf("    setting mesh to %zu vertices (before %zu)\n", 24 * quads.size(), old_num_verts);
 
 	// allocate memory if needed
 	const size_t old_chunk_sz = map->ctx->assets.get_chunk_size(a, (uint8_t*)mesh->vertices) / sizeof(IndexedMesh::Vertex);
@@ -221,7 +221,6 @@ static void generate_chunk(map_system_t *map, chunk_t& chunk, glm::ivec3 coordin
 		ZoneScoped("terrain_gen");
 		map->noise->SetNoiseType(HastyNoise::NoiseType::Simplex);
 		map->noise->SetFrequency(0.0025f);
-		std::printf("    generating terrain texture at (%d, %d)\n", coordinate.x, coordinate.z);
 		if (!is_outside_range)
 			terrain = map->noise->GetNoiseSet(tex_coord.x, tex_coord.z, 0, CHUNK_SIZE, CHUNK_SIZE, 1);
 	}
@@ -233,18 +232,6 @@ static void generate_chunk(map_system_t *map, chunk_t& chunk, glm::ivec3 coordin
 		for (size_t z = 0; z < CHUNK_SIZE; z++) {
 			for (size_t y = 0; y < CHUNK_SIZE; y++) {
 				const size_t idx = x * CHUNK_2 + z * CHUNK_1 + y;
-
-				/*const float val = buffer[idx];
-				if (val > 0.f && val < .2f) {
-					blocks[idx] = chunk_t::GRASS;
-				}
-				else if (val > .2f) {
-					blocks[idx] = chunk_t::ROCK;
-				}
-				else {
-					blocks[idx] = chunk_t::AIR;
-				}*/
-
 				const size_t terrain_idx = x * CHUNK_1 + z;
 				const float test = (float)coordinate.y + (float)y / (float)CHUNK_SIZE;
 
@@ -269,7 +256,6 @@ static void generate_chunk(map_system_t *map, chunk_t& chunk, glm::ivec3 coordin
 		std::vector<quad_t> quads;
 		for (int j = 0; j < chunk_t::_COUNT; j++) {
 			quads = blocks_to_mesh_greedy(blocks, j);
-			std::printf("[map] generating quad mesh for " VEC3_FMTD "\n", VEC3_UNPACK(coordinate));
 			generate_quad_mesh(map, chunk.meshes[j], quads, j);
 		}
 	}
@@ -348,9 +334,6 @@ static void load_chunks(map_system_t* map, std::vector<glm::ivec3>& to_load)
 			}
 			for_real.push_back({ chunk, ch });
 		}
-
-		if (for_real.size() == 0)
-			return;
 	}
 
 	// generate chunks (heavy lifting -- go wide)
@@ -365,7 +348,7 @@ static void load_chunks(map_system_t* map, std::vector<glm::ivec3>& to_load)
 	//        which right now has no locking.
 	// ANSWER: this is in fact thread safe --- each thread touches the memory blocks of a given number of assets,
 	//         and they never insert/remove from the outermost map in the asset manager. so it's ok.
-#pragma omp parallel for num_threads(4)
+//#pragma omp parallel for num_threads(4)
 	for (int i = 0; i < for_real.size(); i++) {
 		generate_chunk(map, for_real[i].second, for_real[i].first);
 	}
