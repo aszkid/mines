@@ -16,7 +16,7 @@
      This will remove the pain of needing multiple entities per chunk (one for each material mesh).
      Also, we will then pack the three meshes in a single VBO and appease the driver demons.
 
-[  ] Load config from json/lua/ini files
+[OK] Load config from json/lua/ini files
 
 [  ] Make render commands also hold underlying buffer size
 
@@ -24,4 +24,4 @@
 
 [  ] Block picking
 
-[  ] Water level
+[OK] Water level

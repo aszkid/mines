@@ -13,8 +13,8 @@
 #include "utils.h"
 #include <Tracy.hpp>
 #include <bitset>
+#include "Globals.h"
 
-static const int CHUNK_SIZE = 64;
 static const size_t CHUNK_1 = static_cast<size_t>(CHUNK_SIZE);
 static const size_t CHUNK_2 = CHUNK_1 * CHUNK_1;
 static const size_t CHUNK_3 = CHUNK_2 * CHUNK_1;
@@ -23,7 +23,7 @@ static const size_t CHUNK_3 = CHUNK_2 * CHUNK_1;
 #define VEC3_FMTD "(%d, %d, %d)"
 
 map_system_t::map_system_t(context_t* ctx)
-	: ctx(ctx), view_distance(5), seed(0), chunk_coord(0), n_chunks(0)
+	: ctx(ctx), view_distance(0), seed(0), chunk_coord(0), n_chunks(0)
 {}
 
 map_system_t::~map_system_t()

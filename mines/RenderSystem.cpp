@@ -1,6 +1,7 @@
 #include "RenderSystem.h"
 
 // general
+#include "Globals.h"
 #include "Context.h"
 #include <cstdio>
 #include <fstream>
@@ -302,7 +303,7 @@ void render_system_t::render(entity_t camera)
         }
     }
 
-    int projection_loc, model_loc, view_loc, lightpos_loc, lightcol_loc, viewpos_loc;
+    int projection_loc, model_loc, view_loc, lightpos_loc, lightcol_loc, viewpos_loc, chunksz_loc;
     glm::mat4 view, projection;
     Camera* cam;
 
@@ -324,13 +325,15 @@ void render_system_t::render(entity_t camera)
         lightpos_loc = glGetUniformLocation(shader, "lightPos");
         lightcol_loc = glGetUniformLocation(shader, "lightColor");
         viewpos_loc = glGetUniformLocation(shader, "viewPos");
+        chunksz_loc = glGetUniformLocation(shader, "chunkSize");
 
         // set uniform values
         glUniformMatrix4fv(projection_loc, 1, GL_FALSE, glm::value_ptr(projection));
         glUniformMatrix4fv(view_loc, 1, GL_FALSE, glm::value_ptr(view));
-        glUniform3f(lightpos_loc, -10.f, 64.f, 32.f);
+        glUniform4f(lightpos_loc, -10.f, 64.f, 32.f, 1.0f);
         glUniform3f(lightcol_loc, 1.f, 1.f, 1.f);
         glUniform3f(viewpos_loc, cam->pos.x, cam->pos.y, cam->pos.z);
+        glUniform1f(chunksz_loc, CHUNK_SIZE);
     }
 
     std::vector<std::tuple<entity_t, cmd_t, glm::mat4, float, glm::vec3>> render_data;

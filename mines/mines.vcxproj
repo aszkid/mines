@@ -185,6 +185,7 @@
     <ClInclude Include="Context.h" />
     <ClInclude Include="Entity.h" />
     <ClInclude Include="EntityManager.h" />
+    <ClInclude Include="Globals.h" />
     <ClInclude Include="hash.h" />
     <ClInclude Include="IndexedMesh.h" />
     <ClInclude Include="IndexedRenderMesh.h" />
